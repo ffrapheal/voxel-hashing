@@ -5,13 +5,13 @@ The `Voxelhash.h` is the main code file.
 ## function interface
 
 `void allocate(const HashParams& params, bool dataOnGPU = true)`  
-allocte the space, and decide the specific slots in the hash table
+*Usage: allocte the space, and decide the specific slots in the hash table*
 
 `void free()`  
-free memory acquired by allocate 
+*Usage: free memory acquired by allocate* 
 
 `HashData copyToCPU() const`  
-helper function, copy a new hash data to cpu
+Usage: helper function, copy a new hash data to cpu
 
 `uint computeHashPos(const int3& virtualVoxelPos) const`  
 use the position of voxel(world coordinate) to compute the specific slots in hash table
