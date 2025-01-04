@@ -1,7 +1,6 @@
 #ifndef VOXEL_HASH
 #define VOXEL_HASH
 
-//Header file
 #include <cuda_runtime.h>
 #include "CUDAHashParams.h"
 #include <stddef.h>
@@ -9,8 +8,8 @@
 #include <vector>
 #include <sstream>
 #include <cutil_math.h>
+
 #define SDF_BLOCK_SIZE 100
-//rename data
 
 #ifndef sint
 typedef signed int sint;
@@ -36,27 +35,17 @@ typedef unsigned char uchar;
 typedef signed char schar;
 #endif
 
-//constant
-
 static const int LOCK_ENTRY = -1;
 static const int FREE_ENTRY = -2;
 static const int NO_OFFSET = 0;
 static const int UNLOCK_ENTRY = 0;
 
-//struct define
-struct HashEntry 
-{
-	int3	pos;		//hash position (lower left corner of SDFBlock))
+struct HashEntry {
+	int3 pos;		//hash position (lower left corner of SDFBlock))
 	int		ptr;		//pointer into heap to SDFBlock
 	uint	offset;		//offset for collisions
 
-	
 	__device__ void operator=(const struct HashEntry& e) {
-		//((int*)this)[0] = ((const int*)&e)[0];
-		//((int*)this)[1] = ((const int*)&e)[1];
-		//((int*)this)[2] = ((const int*)&e)[2];
-		//((int*)this)[3] = ((const int*)&e)[3];
-		//((int*)this)[4] = ((const int*)&e)[4];
 		((long long*)this)[0] = ((const long long*)&e)[0];
 		((long long*)this)[1] = ((const long long*)&e)[1];
 		((int*)this)[4] = ((const int*)&e)[4];
@@ -65,16 +54,13 @@ struct HashEntry
 
 struct Voxel {
 	float	sdf;		//signed distance function
-	//uchar3	color;		//color 
 	uchar	weight;		//accumulated sdf weight
 
 	__device__ void operator=(const struct Voxel& v) {
-		//((int*)this)[0] = ((const int*)&v)[0];
-		//((int*)this)[1] = ((const int*)&v)[1];
 		((long long*)this)[0] = ((const long long*)&v)[0];
 	}
+} __attribute__((aligned(8)));
 
-}__attribute__((aligned(8)));
 __global__
 void updatesdfframe(float3* pos, float3* normal);
 
@@ -86,6 +72,7 @@ void initializeHeap(unsigned int* d_heap, unsigned int numSDFBlocks);
 
 __global__ 
 void initializeHeapCounter(unsigned int* d_heapCounter, unsigned int value);
+
 class HashData {
 
 	///////////////
@@ -98,10 +85,6 @@ class HashData {
 		d_heap = NULL;
 		d_heapCounter = NULL;
 		d_hash = NULL;
-		// d_hashDecision = NULL;
-		// d_hashDecisionPrefix = NULL;
-		// d_hashCompactified = NULL;
-		// d_hashCompactifiedCounter = NULL;
 		d_SDFBlocks = NULL;
 		d_hashBucketMutex = NULL;
 		m_bIsOnGPU = false;
@@ -158,13 +141,6 @@ class HashData {
 	__device__ 
 	int3 worldToSDFBlock(const float3& worldPos) const;
 
-	//determine if it is behind the frustum.
-	// __device__
-	// bool isSDFBlockInCameraFrustumApprox(const int3& sdfBlock) {
-	// 	float3 posWorld = virtualVoxelPosToWorld(SDFBlockToVirtualVoxelPos(sdfBlock)) + c_hashParams.m_virtualVoxelSize * 0.5f * (SDF_BLOCK_SIZE - 1.0f);
-	// 	return DepthCameraData::isInCameraFrustumApprox(c_hashParams.m_rigidTransformInverse, posWorld);
-	// }
-
 	__device__ 
 	uint3 delinearizeVoxelIndex(uint idx) const;
 
@@ -176,7 +152,6 @@ class HashData {
 
 	__device__ 
 	HashEntry getHashEntry(const float3& WorldPos) const;
-
 
 	__device__ 
 	void deleteHashEntry(uint id);
@@ -192,7 +167,6 @@ class HashData {
 
 	__device__ 
 	void deleteVoxel(uint id);
-
 
 	__device__ 
 	Voxel getVoxel(const float3& worldPos) const;
@@ -215,7 +189,7 @@ class HashData {
 	__device__
 	void appendHeap(uint ptr);
 
-    __device__
+	__device__
 	void insertHashEntryElement(const float3& worldpos);
 
 	__device__
@@ -231,4 +205,5 @@ class HashData {
 
 	bool		m_bIsOnGPU;					//the class be be used on both cpu and gpu
 };
+
 #endif

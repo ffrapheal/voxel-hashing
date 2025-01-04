@@ -30,6 +30,10 @@ cuda_runtime.h
 math.h
 -
 
+/home/hmy/voxel_hashing_dev/src/VoxelHash.cu
+VoxelHash.h
+-
+
 /home/hmy/voxel_hashing_dev/src/main.cu
 iostream
 -
