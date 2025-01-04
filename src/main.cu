@@ -2,13 +2,14 @@
 #include"VoxelHash.h"
 #include<cuda_runtime.h>
 #include<device_launch_parameters.h>
+
 __global__ void test(HashData * hash,int * d_count)
 {
     float a=56*blockIdx.x;
     float b=56*blockIdx.x;
     float c=56*blockIdx.x;
     float3 worldpos=make_float3(a,b,c);
-    //uint pos=hash->computeHashPos(worldpos);
+    uint pos=hash->computeHashPos(worldpos);
     return;
 }
 int main()
@@ -29,7 +30,7 @@ int main()
     cudaDeviceSynchronize();
     hash.free();
     cudaMemcpy(&count,d_count,sizeof(int),cudaMemcpyDeviceToHost);    
-    std::cout<<"最终count为:"<<count<<std::endl;
+    std::cout<<"count: "<<count<<std::endl;
     cudaFree(d_hashdata);
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {

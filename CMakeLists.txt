@@ -1,44 +1,39 @@
 cmake_minimum_required(VERSION 3.10)
 
-# Project name
-project(geo_detector LANGUAGES CXX CUDA)
+# 项目名称
+project(VoxelHash LANGUAGES CXX CUDA)
 
-# Set the C++ standard
+# 设置C++标准
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-
-# ------------------------------------------------
-#                 Dependencies
-# ------------------------------------------------
-## CUDA
+# 查找CUDA
 find_package(CUDA 11.8 REQUIRED)
-IF (CUDA_FOUND)
-    include_directories("${CUDA_INCLUDE_DIRS}")
-    # Optional: Specify the arch of your CUDA hardware here
-    SET(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-O3;-std=c++11 -gencode arch=compute_52,code=sm_52 --expt-relaxed-constexpr -Wno-deprecated-declarations) # -Wno-deprecated-declarations
-ENDIF ()
 
-SET(CUDA_PROPAGATE_HOST_FLAGS OFF)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-deprecated-declarations") # -Weffc++
-
-set(PROJECT_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
-set(PROJECT_SOURCE_DIR ${PROJECT_SOURCE_DIR}/src)
-
-# Add include directories
+# 添加包含目录
 include_directories(
-    ${PROJECT_INCLUDE_DIR}
+    ${PROJECT_SOURCE_DIR}/include
 )
 
-# Add source files
-file(GLOB_RECURSE SOURCES
-    ${PROJECT_SOURCE_DIR}/*.cu
+# 添加源文件
+set(SOURCES
+    ${PROJECT_SOURCE_DIR}/src/main.cu
+    ${PROJECT_SOURCE_DIR}/src/VoxelHash.cu
 )
 
-# cuda_add_library(${PROJECT_NAME} STATIC ${SOURCES})
+# 添加可执行文件
 add_executable(${PROJECT_NAME} ${SOURCES})
 
+# 设置CUDA编译选项
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    CUDA_SEPARABLE_COMPILATION ON
+)
+
+# 添加编译选项
 target_compile_options(${PROJECT_NAME} PRIVATE
-    $<$<COMPILE_LANGUAGE:CXX>:-Wno-unused-function -Wno-unused-variable>
+    $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Wno-deprecated-declarations>
     $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr -Wno-deprecated-declarations>
 )
+
+# 链接CUDA库
+target_link_libraries(${PROJECT_NAME} ${CUDA_LIBRARIES})

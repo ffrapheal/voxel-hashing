@@ -14,15 +14,17 @@ __constant__ HashParams c_hashParams;
 #define PINF __int_as_float(0x7f800000)
 #endif
 	__global__
-	void updatesdfframe(HashData *hash,float3 * worldpos, float3* normal)
+	void updatesdfframe(HashData *hash,float3 * worldpos, float3* normal, int numSDFBlocks)
 	{
-		int idx;
-		hash->insertHashEntryElement(worldpos[idx]);
-		HashEntry curr = hash->getHashEntry(worldpos[idx]);
-		float sdf=hash->computesdf(worldpos[idx],normal[idx]);
-		Voxel v = hash->getVoxel(worldpos[idx]);
-		hash->combineVoxel(v,sdf);
-		hash->setVoxel(worldpos[idx],v);
+		int idx = blockIdx.x * blockDim.x + threadIdx.x;
+		if (idx < numSDFBlocks) {
+			hash->insertHashEntryElement(worldpos[idx]);
+			HashEntry curr = hash->getHashEntry(worldpos[idx]);
+			float sdf=hash->computesdf(worldpos[idx],normal[idx]);
+			Voxel v = hash->getVoxel(worldpos[idx]);
+			hash->combineVoxel(v,sdf);
+			hash->setVoxel(worldpos[idx],v);
+		}
 	}
     __global__ 
     void initializeHashEntry(HashEntry* d_hash, int hashNumBuckets, int hashBucketSize)
@@ -57,18 +59,18 @@ __constant__ HashParams c_hashParams;
 	__host__
 	void HashData::initializeHashParams(HashParams& params)
 	{
-		params.m_hashBucketSize=m_hashBucketSize;
-		params.m_hashMaxCollisionLinkedListSize=m_hashMaxCollisionLinkedListSize;
-		params.m_hashNumBuckets=m_hashNumBuckets;
-		params.m_integrationWeightMax=m_integrationWeightMax;
-		params.m_integrationWeightSample=m_integrationWeightSample;
-		params.m_maxIntegrationDistance=m_maxIntegrationDistance;
-		params.m_numOccupiedBlocks=m_numOccupiedBlocks;
-		params.m_numSDFBlocks=m_numSDFBlocks;
-		params.m_SDFBlockSize=m_SDFBlockSize;
-		params.m_truncation=m_truncation;
-		params.m_truncScale=m_truncScale;
-		params.m_virtualVoxelSize=m_virtualVoxelSize;
+		params.m_hashBucketSize=100;
+		params.m_hashMaxCollisionLinkedListSize=100;
+		params.m_hashNumBuckets=100;
+		params.m_integrationWeightMax=100;
+		params.m_integrationWeightSample=100;
+		params.m_maxIntegrationDistance=100;
+		params.m_numOccupiedBlocks=100;
+		params.m_numSDFBlocks=100;
+		params.m_SDFBlockSize=100;
+		params.m_truncation=100;
+		params.m_truncScale=100;
+		params.m_virtualVoxelSize=100;
 	}
 
 	__host__

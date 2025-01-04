@@ -1,0 +1,1 @@
+/usr/local/cuda/bin/nvcc   -Xcompiler=-fPIC -Wno-deprecated-gpu-targets -shared -dlink CMakeFiles/VoxelHash.dir/src/main.cu.o CMakeFiles/VoxelHash.dir/src/VoxelHash.cu.o -o CMakeFiles/VoxelHash.dir/cmake_device_link.o  /usr/local/cuda/lib64/libcudart_static.a -lpthread -ldl  

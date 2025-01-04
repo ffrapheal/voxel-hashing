@@ -9,7 +9,6 @@
 #include <vector>
 #include <sstream>
 #include <cutil_math.h>
-#include <Hashconstant.h>
 #define SDF_BLOCK_SIZE 100
 //rename data
 
