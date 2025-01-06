@@ -8,8 +8,7 @@
 #include <vector>
 #include <sstream>
 #include <cutil_math.h>
-
-#define SDF_BLOCK_SIZE 100
+//rename data
 
 #ifndef sint
 typedef signed int sint;
@@ -189,8 +188,8 @@ class HashData {
 	__device__
 	void appendHeap(uint ptr);
 
-	__device__
-	void insertHashEntryElement(const float3& worldpos);
+    __device__
+	bool insertHashEntryElement(const float3& worldpos);
 
 	__device__
 	bool deleteHashEntryElement(const int3& sdfBlock);
@@ -202,8 +201,8 @@ class HashData {
 	HashEntry*	d_hash;						//hash that stores pointers to sdf blocks
 	Voxel*		d_SDFBlocks;				//sub-blocks that contain 8x8x8 voxels (linearized); are allocated by heap
 	int*		d_hashBucketMutex;			//binary flag per hash bucket; used for allocation to atomically lock a bucket
-
 	bool		m_bIsOnGPU;					//the class be be used on both cpu and gpu
+
 };
 
 #endif
