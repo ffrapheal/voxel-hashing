@@ -35,15 +35,15 @@ typedef unsigned char uchar;
 typedef signed char schar;
 #endif
 
+static const int UNLOCK_ENTRY = 0;
 static const int LOCK_ENTRY = -1;
 static const int FREE_ENTRY = -2;
 static const int NO_OFFSET = 0;
-static const int UNLOCK_ENTRY = 0;
 
 struct HashEntry {
-	int3 pos;		//hash position (lower left corner of SDFBlock))
-	int		ptr;		//pointer into heap to SDFBlock
-	uint	offset;		//offset for collisions
+	int3 pos;		//hash position, as we only record pointer to SDFBlock, the position is SDFBlock's position.
+	int ptr;		//pointer into heap to SDFBlock
+	uint offset;	//offset for collisions
 
 	__device__ void operator=(const struct HashEntry& e) {
 		((long long*)this)[0] = ((const long long*)&e)[0];
@@ -61,25 +61,12 @@ struct Voxel {
 	}
 } __attribute__((aligned(8)));
 
-__global__
-void updatesdfframe(float3* pos, float3* normal);
-
-__global__ 
-void initializeHashEntry(HashEntry* d_hash, int hashNumBuckets, int hashBucketSize);
-
-__global__ 
-void initializeHeap(unsigned int* d_heap, unsigned int numSDFBlocks);
-
-__global__ 
-void initializeHeapCounter(unsigned int* d_heapCounter, unsigned int value);
-
 class HashData {
 
-	///////////////
-	// Host part //
-	///////////////
-
-	public:
+///////////////
+// Host part //
+///////////////
+public:
     __device__ __host__
 	HashData() {
 		d_heap = NULL;
@@ -98,12 +85,9 @@ class HashData {
 
 	__host__
 	void updateParams(const HashParams& params);
-
-	__host__
-	HashData copyToCPU() const;
 	
 	__host__
-	void initializeHashParams(HashParams& params);
+	void initializeHashParams(HashParams& params, const std::string& config_file);
 	/////////////////
 	// Device part //
 	/////////////////
@@ -172,7 +156,7 @@ class HashData {
 	Voxel getVoxel(const float3& worldPos) const;
 
 	__device__ 
-	int setVoxel(const float3& worldPos, Voxel& voxelInput) const;
+	bool setVoxel(const float3& worldPos, Voxel& voxelInput) const;
 
 	__device__ 
 	HashEntry getHashEntryForWorldPos(const float3& WorldPos) const;
@@ -205,5 +189,17 @@ class HashData {
 
 	bool		m_bIsOnGPU;					//the class be be used on both cpu and gpu
 };
+
+__global__
+void updatesdfframe(HashData* hash, float3* worldpos, float3* normal, int numPoints);
+
+__global__ 
+void initializeHashEntry(HashEntry* d_hash, int hashNumBuckets, int hashBucketSize);
+
+__global__ 
+void initializeHeap(unsigned int* d_heap, unsigned int numSDFBlocks);
+
+__global__ 
+void initializeHeapCounter(unsigned int* d_heapCounter, unsigned int value);
 
 #endif

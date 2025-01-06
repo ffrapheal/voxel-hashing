@@ -36,4 +36,4 @@ target_compile_options(${PROJECT_NAME} PRIVATE
 )
 
 # 链接CUDA库
-target_link_libraries(${PROJECT_NAME} ${CUDA_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${CUDA_LIBRARIES} yaml-cpp)

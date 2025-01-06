@@ -1,0 +1,12 @@
+hashNumBuckets: 100
+hashBucketSize: 100
+hashMaxCollisionLinkedListSize: 100
+numSDFBlocks: 100
+SDFBlockSize: 100
+virtualVoxelSize: 0.05
+numOccupiedBlocks: 0
+maxIntegrationDistance: 20
+truncScale: 5
+truncation: 5
+integrationWeightSample: 5
+integrationWeightMax: 5
