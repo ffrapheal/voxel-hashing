@@ -33,6 +33,8 @@ math.h
 /home/hmy/voxel_hashing_dev/src/VoxelHash.cu
 VoxelHash.h
 -
+yaml-cpp/yaml.h
+-
 
 /home/hmy/voxel_hashing_dev/src/main.cu
 iostream

@@ -26,6 +26,12 @@ __global__ void test(HashData * hash,int * count,float * pos,int * num_points)
     return;
 }
 
+void checkCudaError(cudaError_t err) {
+    if (err != cudaSuccess) {
+        std::cout << "CUDA error: " << cudaGetErrorString(err) << std::endl;
+    }
+}
+
 int main() {
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
 
