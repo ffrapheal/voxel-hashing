@@ -12,37 +12,40 @@ __constant__ HashParams c_hashParams;
 #ifndef PINF
 #define PINF __int_as_float(0x7f800000)
 #endif
+__global__ void reduceSum(float* input, float* output, int n) {
+    extern __shared__ float sharedData[];
 
-// cuda error check
-#define CUDA_ERROR_CHECK(call) { \
-	cudaError_t err = call; \
-	if (err != cudaSuccess) { \
-		printf("CUDA error: %s\n", cudaGetErrorString(err)); \
-		exit(1); \
-	} \
+    unsigned int tid = threadIdx.x;
+    unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // 每个线程加载一个元素到共享内存
+    sharedData[tid] = (index < n) ? input[index] : 0.0f;
+    __syncthreads();
+
+    // 执行归约
+    for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            sharedData[tid] += sharedData[tid + s];
+        }
+        __syncthreads();
+    }
+
+    // 将每个块的结果写入输出数组
+    if (tid == 0) {
+        output[blockIdx.x] = sharedData[0];
+    }
 }
 
-// TODO: create a new function to do tsdf update in parallel.
-// TODO: in this function, we are supposed to update the voxel hash table in parallel.
-__global__ void updatesdfframe(HashData* hash, float3* worldpos, float3* normal, int numPoints) {
+__global__ void updatesdfframe(HashData* hash, float3* worldpos, float3* normal, int numSDFBlocks,int* d_sdfvalue) {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
-	if (idx < numPoints) {
-		// in this per-point processing function, we calculate each point's tsdf value
-		// assume the HashData is well-initialized.
-		int3 voxelpos = hash->worldToVirtualVoxelPos(worldpos[idx]);
-		int3 sdfblockpos = hash->virtualVoxelPosToSDFBlock(voxelpos);
-		
-		HashEntry hashEntry = hash->getHashEntryForWorldPos(worldpos[idx]);
-		if (hashEntry.ptr != FREE_ENTRY) {
-			// the voxel is already inserted into the hash table.
-			// update the voxel's tsdf value.
+	if (idx < numSDFBlocks) {
+		hash->insertHashEntryElement(worldpos[idx]);
+		HashEntry curr = hash->getHashEntry(worldpos[idx]);
+		__threadfence();
+		if(curr.ptr!=FREE_ENTRY)
+		{
 			float sdf = hash->computesdf(worldpos[idx], normal[idx]);
-			// store the sdf value into a data array for later refreshment at once.
-			
-		} else {
-			// the voxel is not inserted into the hash table.
-			// insert the voxel into the hash table.
-			hash->insertHashEntryElement(worldpos[idx]);
+			d_sdfvalue[idx]=sdf;
 		}
 	}
 }
@@ -179,6 +182,7 @@ __host__ void HashData::free() {
 	d_heapCounter = NULL;
 	d_SDFBlocks = NULL;
 	d_hashBucketMutex = NULL;
+	
 }
 
 // DONE: no problems for now.
@@ -188,6 +192,39 @@ __host__ void HashData::updateParams(const HashParams& params) {
 		CUDA_ERROR_CHECK(cudaGetSymbolSize(&size, reinterpret_cast<const void*>(&c_hashParams)));
 		CUDA_ERROR_CHECK(cudaMemcpyToSymbol(reinterpret_cast<const void*>(&c_hashParams), &params, size, 0, cudaMemcpyHostToDevice));
 	}
+}
+
+
+__host__ HashData HashData::updatesdf(float3* worldpos, float3* normal, int numSDFBlocks){
+	HashData* d_hashData;
+    cudaMalloc(&d_hashData, sizeof(HashData));
+    cudaMemcpy(d_hashData, this, sizeof(HashData), cudaMemcpyHostToDevice);
+	int* d_sdfvalue;
+	cudaMalloc(&d_sdfvalue,sizeof(int)*numSDFBlocks);
+	dim3 blockSize(1024);
+	dim3 gridSize((numSDFBlocks + blockSize.x - 1) / blockSize.x);
+	updatesdfframe<<<gridSize,blockSize>>>(d_hashData,worldpos,normal,numSDFBlocks,d_sdfvalue);
+	cudaDeviceSynchronize();
+
+
+	cudaFree(d_hashData);
+	cudaFree(d_sdfvalue);
+}
+
+__host__ HashData HashData::updatesdf(float3* worldpos, float3* normal, int numSDFBlocks){
+	HashData* d_hashData;
+    cudaMalloc(&d_hashData, sizeof(HashData));
+    cudaMemcpy(d_hashData, this, sizeof(HashData), cudaMemcpyHostToDevice);
+	int* d_sdfvalue;
+	cudaMalloc(&d_sdfvalue,sizeof(int)*numSDFBlocks);
+	dim3 blockSize(1024);
+	dim3 gridSize((numSDFBlocks + blockSize.x - 1) / blockSize.x);
+	updatesdfframe<<<gridSize,blockSize>>>(d_hashData,worldpos,normal,numSDFBlocks,d_sdfvalue);
+	cudaDeviceSynchronize();
+
+
+	cudaFree(d_hashData);
+	cudaFree(d_sdfvalue);
 }
 
 #ifdef __CUDACC__
@@ -429,6 +466,7 @@ __device__ void HashData::appendHeap(uint ptr) {
 // TODO: Need to change return type, return the hash entry just inserted. 
 // TODO: collision not considered for now.
 __device__ void HashData::insertHashEntryElement(const float3& WorldPos) {
+__device__ bool HashData::insertHashEntryElement(const float3& WorldPos) {
 	uint h = computeHashPos(WorldPos);
 	uint hp = h * c_hashParams.m_hashBucketSize;
 	int3 pos = worldToSDFBlock(WorldPos);
@@ -436,30 +474,30 @@ __device__ void HashData::insertHashEntryElement(const float3& WorldPos) {
 	for (uint j = 0; j < c_hashParams.m_hashBucketSize; j++) {
 		uint i = j + hp;
 		const HashEntry& curr = d_hash[i];
-
 		if (curr.pos.x == pos.x && curr.pos.y == pos.y && curr.pos.z == pos.z && curr.ptr != FREE_ENTRY) {
-			return; // if the hash entry's corresponding SDF block is already inserted into the hash table, do nothing.
+			return true;
 		}
-
 		// if the first empty hash entry is not found yet, and the current hash entry is free, set the first empty hash entry to the current hash entry.
 		if (firstEmpty == -1 && curr.ptr == FREE_ENTRY) {
 			firstEmpty = i;
 		}
 	}
-
-	if (firstEmpty != -1) {
-		// found the first empty hash entry, lock the bucket.
-		int prevValue = atomicExch(&d_hashBucketMutex[h], LOCK_ENTRY); // try to lock the bucket.
-		if (prevValue == UNLOCK_ENTRY) { // if the bucket is not locked before, get the current hash entry successfully and do the insertion.
-			HashEntry& entry = d_hash[firstEmpty];
-			entry.pos = pos;
-			entry.offset = NO_OFFSET;
-			entry.ptr = consumeHeap() * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE;
-			// insertion done. unlock the bucket.
-			atomicExch(&d_hashBucketMutex[h], UNLOCK_ENTRY);
-		} // no else, if the bucket is already locked, do nothing.
+		if (firstEmpty != -1) {	//if there is an empty entry and we haven't allocated the current entry before
+			//int prevValue = 0;
+			//InterlockedExchange(d_hashBucketMutex[h], LOCK_ENTRY, prevValue);	//lock the hash bucket
+			int prevValue = atomicExch(&d_hashBucketMutex[h], LOCK_ENTRY);
+			if (prevValue != LOCK_ENTRY) {	//only proceed if the bucket has been locked
+				HashEntry& entry = d_hash[firstEmpty];
+				entry.pos = pos;
+				entry.offset = NO_OFFSET;		
+				entry.ptr = consumeHeap() * SDF_BLOCK_SIZE*SDF_BLOCK_SIZE*SDF_BLOCK_SIZE;	//memory alloc
+				atomicExch(&d_hashBucketMutex[h], FREE_ENTRY);
+				return true;
+			}
+			atomicExch(&d_hashBucketMutex[h], FREE_ENTRY);
+		}
+		return false;
 	}
-}
 
 // TODO: not used for now. but need to be implemented.
 __device__ bool HashData::deleteHashEntryElement(const int3& sdfBlock) {

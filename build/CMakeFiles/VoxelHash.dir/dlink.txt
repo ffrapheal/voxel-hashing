@@ -1,1 +1,1 @@
-/usr/local/cuda/bin/nvcc   -Xcompiler=-fPIC -Wno-deprecated-gpu-targets -shared -dlink CMakeFiles/VoxelHash.dir/src/main.cu.o CMakeFiles/VoxelHash.dir/src/VoxelHash.cu.o -o CMakeFiles/VoxelHash.dir/cmake_device_link.o  /usr/local/cuda/lib64/libcudart_static.a -lpthread -ldl  -lyaml-cpp 
+/usr/local/cuda-11.8/bin/nvcc -forward-unknown-to-host-compiler -Xcompiler=-fPIC -Wno-deprecated-gpu-targets -shared -dlink --options-file CMakeFiles/VoxelHash.dir/deviceObjects1.rsp -o CMakeFiles/VoxelHash.dir/cmake_device_link.o --options-file CMakeFiles/VoxelHash.dir/deviceLinkLibs.rsp
