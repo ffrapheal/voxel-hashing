@@ -1,41 +1,48 @@
 cmake_minimum_required(VERSION 3.10)
-
-# 项目名称
-project(VoxelHash)
 project(VoxelHash LANGUAGES CXX CUDA)
 
-# 设置C++标准
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+SET(CMAKE_BUILD_TYPE "Debug")
+set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
 
-# 查找CUDA
-find_package(CUDA 11.8 REQUIRED)
-find_package(PCL 1.8 REQUIRED)
-# 添加包含目录
-include_directories(
-    ${PROJECT_SOURCE_DIR}/include
-)
+ADD_COMPILE_OPTIONS(-std=c++14)
+set(CMAKE_CXX_FLAGS "-std=c++14 -O3")
+
+find_package(Eigen3 REQUIRED)
+
+set(PCL_ROOT /usr/lib/x86_64-linux-gnu)
+set(PCL_INCLUDE_DIRS /usr/include/pcl-1.10/pcl)
+
+find_package(PCL 1.10 REQUIRED PATHS ${PCL_ROOT} NO_DEFAULT_PATH)
+
 include_directories(${PCL_INCLUDE_DIRS})
-add_definitions(${PCL_DEFINITIONS})
-# 添加源文件
-set(SOURCES
-    ${PROJECT_SOURCE_DIR}/src/main.cu
-    ${PROJECT_SOURCE_DIR}/src/VoxelHash.cu
+
+find_package(CUDA REQUIRED)
+set(CUDA_NVCC_FLAGS 
+    -O3
+    --expt-relaxed-constexpr
+    -gencode arch=compute_89,code=sm_89
+    -G
+    --disable-warnings
+    -Wno-deprecated-declarations
+    -dc
 )
 
-# 添加可执行文件
-add_executable(${PROJECT_NAME} ${SOURCES})
+set(CUDA_PROPAGATE_HOST_FLAGS OFF)
+set(CUDA_HOST_COMPILER ${CMAKE_CXX_COMPILER})
 
-# 设置CUDA编译选项
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    CUDA_SEPARABLE_COMPILATION ON
+include_directories(
+    ${CUDA_INCLUDE_DIRS}
+    ${PCL_INCLUDE_DIRS}
+    ${EIGEN3_INCLUDE_DIRS}
+    ${CMAKE_SOURCE_DIR}/include
 )
 
-# 添加编译选项
-target_compile_options(${PROJECT_NAME} PRIVATE
-    $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Wno-deprecated-declarations>
-    $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr -Wno-deprecated-declarations>
-)
+set(source_files src/VoxelHash.cu src/main.cu)
 
-# 链接CUDA库
-target_link_libraries(${PROJECT_NAME} ${PCL_LIBRARIES} ${CUDA_LIBRARIES} yaml-cpp)
+cuda_add_library(cuda_impl ${source_files})
+
+target_link_libraries(cuda_impl ${PCL_LIBRARIES} yaml-cpp)
+
+add_executable(${PROJECT_NAME} src/main.cu)
+target_link_libraries(${PROJECT_NAME} cuda_impl yaml-cpp)
+

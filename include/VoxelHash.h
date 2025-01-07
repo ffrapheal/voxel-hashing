@@ -52,8 +52,8 @@ struct HashEntry {
 } __attribute__((aligned(16)));
 
 struct Voxel {
-	float	sdf;		//signed distance function
-	uchar	weight;		//accumulated sdf weight
+	float	sdf_sum;		//signed distance function
+	uchar	weight_sum;		//accumulated sdf weight
 
 	__device__ void operator=(const struct Voxel& v) {
 		((long long*)this)[0] = ((const long long*)&v)[0];
@@ -95,17 +95,8 @@ public:
 	__device__
 	float computesdf(float3 worldpos, float3 normal);
 
-	__device__
-	const HashParams& params() const;
-
 	__device__ 
 	uint computeHashPos(const float3& WorldPos) const;
-
-	__device__ 
-	void combineVoxel(Voxel &v, float sdf) const;
-
-	__device__ 
-	float getTruncation(float z) const;
 
 	__device__ 
 	int3 worldToVirtualVoxelPos(const float3& pos) const;
@@ -135,37 +126,13 @@ public:
 	int WorldPosToLocalSDFBlockIndex(const float3& WorldPos) const;
 
 	__device__ 
-	HashEntry getHashEntry(const float3& WorldPos) const;
-
-	__device__ 
-	void deleteHashEntry(uint id);
-
-	__device__ 
-	void deleteHashEntry(HashEntry& hashEntry);
-
-	__device__ 
-	bool voxelExists(const float3& worldPos) const;
-
-	__device__  
-	void deleteVoxel(Voxel& v) const;
-
-	__device__ 
-	void deleteVoxel(uint id);
-
-	__device__ 
-	Voxel getVoxel(const float3& worldPos) const;
-
-	__device__ 
-	bool setVoxel(const float3& worldPos, Voxel& voxelInput) const;
+	Voxel* getVoxel(const float3& worldPos) const;
 
 	__device__ 
 	HashEntry getHashEntryForWorldPos(const float3& WorldPos) const;
 
 	__device__ 
 	unsigned int getNumHashEntriesPerBucket(unsigned int bucketID);
-
-	__device__ 
-	unsigned int getNumHashLinkedList(unsigned int bucketID);
 
 	__device__
 	uint consumeHeap();
@@ -175,9 +142,6 @@ public:
 
     __device__
 	bool insertHashEntryElement(const float3& worldpos);
-
-	__device__
-	bool deleteHashEntryElement(const int3& sdfBlock);
 
 #endif	//CUDACC
 
