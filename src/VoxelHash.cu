@@ -31,9 +31,11 @@ __global__ void updatesdfframe(HashData* hash, float3* worldpos, float3* normal,
 		if(curr.ptr!=FREE_ENTRY)
 		{
 			float sdf = hash->computesdf(worldpos[idx], normal[idx]);
+			//printf("sdf: %f\n", sdf);
 			Voxel* voxel = hash->getVoxel(worldpos[idx]);
 			atomicAdd(&voxel->sdf_sum, sdf);
 			atomicAdd((int*)&(voxel->weight_sum), 1);
+			//printf("voxel: %d\n", voxel->sdf_sum);
 		}
 	}
 }
@@ -218,6 +220,7 @@ __device__ bool HashData::insertHashEntryElement(const float3& WorldPos) {
 
 // DONE: no problems for now. Calculate per-points signed distance to the surface.
 __device__ float HashData::computesdf(float3 worldpos, float3 normal) {
+	//printf("normal: %f %f %f\n", normal.x, normal.y, normal.z);
 	int3 voxelpos = worldToVirtualVoxelPos(worldpos);
 	float3 pos_center; // the center of the voxel.
 	// note that the virtual voxel is already the center of the voxel, 

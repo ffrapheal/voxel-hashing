@@ -3,6 +3,8 @@
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 #include <pcl/point_types.h>
+#include <pcl/io/pcd_io.h>
+
 __global__ void test(HashData * hash,int * count,float * pos,int num_points)
 {
     int idx=blockIdx.x*blockDim.x+threadIdx.x;
@@ -35,7 +37,7 @@ int main() {
     pcl::PointCloud<pcl::PointXYZINormal>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZINormal>);
     printf("hello world\n");
     // read pcd file
-    if (pcl::io::loadPCDFile<pcl::PointXYZINormal>("/home/hmy/voxel_hashing_dev/point_cloud_7377_points.pcd", *cloud) == -1) // 这里替换为你的PCD文件路径
+    if (pcl::io::loadPCDFile<pcl::PointXYZINormal>("/home/zzz/code/hash/point_cloud_7377_points.pcd", *cloud) == -1) // 这里替换为你的PCD文件路径
     {
         PCL_ERROR("failed to read pcd file \n");
         return -1;
@@ -46,23 +48,26 @@ int main() {
     std::cout << "point cloud size: " << cloud->points.size() << std::endl;
     // traverse each point in point cloud
     size_t num_points = cloud->points.size();
-    float* host_points = new float[num_points * 3]; // each point has three coordinates
+    float3* host_points = new float3[num_points]; // 每个点的坐标
+    float3* host_normals = new float3[num_points]; // 每个点的法线
+
     for (size_t i = 0; i < num_points; ++i) {
-        host_points[i * 3] = cloud->points[i].x;
-        host_points[i * 3 + 1] = cloud->points[i].y;
-        host_points[i * 3 + 2] = cloud->points[i].z;
+        host_points[i] = make_float3(cloud->points[i].x, cloud->points[i].y, cloud->points[i].z);
+        host_normals[i] = make_float3(cloud->points[i].normal_x, cloud->points[i].normal_y, cloud->points[i].normal_z);
+        printf("point: %f %f %f\n", host_points[i].x, host_points[i].y, host_points[i].z);
+        //printf("normal: %f %f %f\n", host_normals[i].x, host_normals[i].y, host_normals[i].z);
     }
-
     // allocate memory on gpu
-    float* device_points;
-    cudaMalloc(&device_points, num_points * 3 * sizeof(float));
-    int* device_num_points;
-    cudaMalloc(&device_num_points,sizeof(int));
+    float3* device_points;
+    cudaMalloc(&device_points, num_points * sizeof(float3));
+    float3* device_normals;  
+    cudaMalloc(&device_normals, num_points * sizeof(float3));
     // copy data to gpu
-    cudaMemcpy(device_points, host_points, num_points * 3 * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_points, host_points, num_points * sizeof(float3), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_normals, host_normals, num_points * sizeof(float3), cudaMemcpyHostToDevice);
     delete[] host_points;
-
-
+    delete[] host_normals;
+    // initialize hash data
     HashData hash;
     hash.allocate(true);
 
@@ -80,7 +85,8 @@ int main() {
     dim3 blockSize(1024);
     dim3 gridSize((num_points + blockSize.x - 1) / blockSize.x);
 
-    test<<<gridSize,blockSize>>>(d_hashdata,d_count,device_points,num_points);
+    // test<<<gridSize,blockSize>>>(d_hashdata,d_count,device_points,num_points);
+    updatesdfframe<<<gridSize,blockSize>>>(d_hashdata,device_points,device_normals,num_points);
     cudaDeviceSynchronize();
     hash.free();
     cudaMemcpy(&count,d_count,sizeof(int),cudaMemcpyDeviceToHost);    
