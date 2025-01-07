@@ -36,13 +36,3 @@ VoxelHash.h
 yaml-cpp/yaml.h
 -
 
-/home/hmy/voxel_hashing_dev/src/main.cu
-iostream
--
-VoxelHash.h
-/home/hmy/voxel_hashing_dev/src/VoxelHash.h
-cuda_runtime.h
--
-device_launch_parameters.h
--
-

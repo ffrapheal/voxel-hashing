@@ -3,7 +3,7 @@
 
 __constant__ HashParams c_hashParams;
 
-#define SDF_BLOCK_SIZE 100
+#define SDF_BLOCK_SIZE ((c_hashParams.m_SDFBlockSize))
 
 #ifndef MINF
 #define MINF __int_as_float(0xff800000)
@@ -22,18 +22,28 @@ __constant__ HashParams c_hashParams;
 	} \
 }
 
-// TODO: fix this function of hash table creation.
+// TODO: create a new function to do tsdf update in parallel.
 // TODO: in this function, we are supposed to update the voxel hash table in parallel.
 __global__ void updatesdfframe(HashData* hash, float3* worldpos, float3* normal, int numPoints) {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	if (idx < numPoints) {
-		// original code, with problems need to be fixed
-		// hash->insertHashEntryElement(worldpos[idx]);
-		// HashEntry curr = hash->getHashEntry(worldpos[idx]);
-		// float sdf = hash->computesdf(worldpos[idx], normal[idx]);
-		// Voxel v = hash->getVoxel(worldpos[idx]);
-		// hash->combineVoxel(v, sdf);
-		// hash->setVoxel(worldpos[idx], v);
+		// in this per-point processing function, we calculate each point's tsdf value
+		// assume the HashData is well-initialized.
+		int3 voxelpos = hash->worldToVirtualVoxelPos(worldpos[idx]);
+		int3 sdfblockpos = hash->virtualVoxelPosToSDFBlock(voxelpos);
+		
+		HashEntry hashEntry = hash->getHashEntryForWorldPos(worldpos[idx]);
+		if (hashEntry.ptr != FREE_ENTRY) {
+			// the voxel is already inserted into the hash table.
+			// update the voxel's tsdf value.
+			float sdf = hash->computesdf(worldpos[idx], normal[idx]);
+			// store the sdf value into a data array for later refreshment at once.
+			
+		} else {
+			// the voxel is not inserted into the hash table.
+			// insert the voxel into the hash table.
+			hash->insertHashEntryElement(worldpos[idx]);
+		}
 	}
 }
 
