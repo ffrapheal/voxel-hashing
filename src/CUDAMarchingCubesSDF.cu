@@ -29,7 +29,6 @@ extern "C" void resetMarchingCubesCUDA(MarchingCubesData& data)
 {
 	const dim3 blockSize(1, 1, 1);
 	const dim3 gridSize(1, 1, 1);
-
 	resetMarchingCubesKernel<<<gridSize, blockSize>>>(data);
 
 #ifdef _DEBUG

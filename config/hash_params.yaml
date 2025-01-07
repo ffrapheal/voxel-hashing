@@ -1,8 +1,8 @@
-hashNumBuckets: 100
-hashBucketSize: 100
+hashNumBuckets: 10000
+hashBucketSize: 10
 hashMaxCollisionLinkedListSize: 100
-numSDFBlocks: 100
-SDFBlockSize: 100
+numSDFBlocks: 10000
+SDFBlockSize: 8
 virtualVoxelSize: 0.05
 numOccupiedBlocks: 0
 maxIntegrationDistance: 20

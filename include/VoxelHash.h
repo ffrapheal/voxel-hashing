@@ -87,6 +87,7 @@ public:
 	
 	__host__
 	void initializeHashParams(HashParams& params, const std::string& config_file);
+
 	/////////////////
 	// Device part //
 	/////////////////

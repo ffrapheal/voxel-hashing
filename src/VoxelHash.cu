@@ -3,8 +3,7 @@
 
 __constant__ HashParams c_hashParams;
 
-#define SDF_BLOCK_SIZE 8
-#define HASH_BUCKET_SIZE 10 
+#define SDF_BLOCK_SIZE ((c_hashParams.m_SDFBlockSize))
 #ifndef MINF
 #define MINF __int_as_float(0xff800000)
 #endif
@@ -12,6 +11,14 @@ __constant__ HashParams c_hashParams;
 #ifndef PINF
 #define PINF __int_as_float(0x7f800000)
 #endif
+
+#define CUDA_ERROR_CHECK(err) { \
+    if (err != cudaSuccess) { \
+        printf("CUDA error at %s:%d: %s\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
+        exit(-1); \
+    } \
+}
+
 __global__ void reduceSum(float* input, float* output, int n) {
     extern __shared__ float sharedData[];
 
@@ -36,7 +43,7 @@ __global__ void reduceSum(float* input, float* output, int n) {
     }
 }
 
-__global__ void updatesdfframe(HashData* hash, float3* worldpos, float3* normal, int numSDFBlocks,int* d_sdfvalue) {
+__global__ void updatesdfframe(HashData* hash, float3* worldpos, float3* normal, int numSDFBlocks) {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	if (idx < numSDFBlocks) {
 		hash->insertHashEntryElement(worldpos[idx]);
@@ -45,7 +52,7 @@ __global__ void updatesdfframe(HashData* hash, float3* worldpos, float3* normal,
 		if(curr.ptr!=FREE_ENTRY)
 		{
 			float sdf = hash->computesdf(worldpos[idx], normal[idx]);
-			d_sdfvalue[idx]=sdf;
+			
 		}
 	}
 }
@@ -114,7 +121,7 @@ __host__ void HashData::initializeHashParams(HashParams& params, const std::stri
 // DONE: no problems for now.
 __host__ void HashData::allocate(bool dataOnGPU) {
 	HashParams params;
-	initializeHashParams(params, "/home/hmy/voxel_hashing_dev/config/hash_params.yaml");
+	initializeHashParams(params, "/home/zzz/code/hash/config/hash_params.yaml");
 	m_bIsOnGPU = dataOnGPU;
 	if (m_bIsOnGPU) {
 		// allocate memory for heap, heap counter.
@@ -165,6 +172,7 @@ __host__ void HashData::allocate(bool dataOnGPU) {
 // DONE: no problems for now.
 __host__ void HashData::free() {
 	if (m_bIsOnGPU) {
+		
 		CUDA_ERROR_CHECK(cudaFree(d_heap));
 		CUDA_ERROR_CHECK(cudaFree(d_heapCounter));
 		CUDA_ERROR_CHECK(cudaFree(d_hash));
@@ -195,37 +203,37 @@ __host__ void HashData::updateParams(const HashParams& params) {
 }
 
 
-__host__ HashData HashData::updatesdf(float3* worldpos, float3* normal, int numSDFBlocks){
-	HashData* d_hashData;
-    cudaMalloc(&d_hashData, sizeof(HashData));
-    cudaMemcpy(d_hashData, this, sizeof(HashData), cudaMemcpyHostToDevice);
-	int* d_sdfvalue;
-	cudaMalloc(&d_sdfvalue,sizeof(int)*numSDFBlocks);
-	dim3 blockSize(1024);
-	dim3 gridSize((numSDFBlocks + blockSize.x - 1) / blockSize.x);
-	updatesdfframe<<<gridSize,blockSize>>>(d_hashData,worldpos,normal,numSDFBlocks,d_sdfvalue);
-	cudaDeviceSynchronize();
+// __host__ HashData HashData::updatesdf(float3* worldpos, float3* normal, int numSDFBlocks){
+// 	HashData* d_hashData;
+//     cudaMalloc(&d_hashData, sizeof(HashData));
+//     cudaMemcpy(d_hashData, this, sizeof(HashData), cudaMemcpyHostToDevice);
+// 	int* d_sdfvalue;
+// 	cudaMalloc(&d_sdfvalue,sizeof(int)*numSDFBlocks);
+// 	dim3 blockSize(1024);
+// 	dim3 gridSize((numSDFBlocks + blockSize.x - 1) / blockSize.x);
+// 	updatesdfframe<<<gridSize,blockSize>>>(d_hashData,worldpos,normal,numSDFBlocks,d_sdfvalue);
+// 	cudaDeviceSynchronize();
 
 
-	cudaFree(d_hashData);
-	cudaFree(d_sdfvalue);
-}
+// 	cudaFree(d_hashData);
+// 	cudaFree(d_sdfvalue);
+// }
 
-__host__ HashData HashData::updatesdf(float3* worldpos, float3* normal, int numSDFBlocks){
-	HashData* d_hashData;
-    cudaMalloc(&d_hashData, sizeof(HashData));
-    cudaMemcpy(d_hashData, this, sizeof(HashData), cudaMemcpyHostToDevice);
-	int* d_sdfvalue;
-	cudaMalloc(&d_sdfvalue,sizeof(int)*numSDFBlocks);
-	dim3 blockSize(1024);
-	dim3 gridSize((numSDFBlocks + blockSize.x - 1) / blockSize.x);
-	updatesdfframe<<<gridSize,blockSize>>>(d_hashData,worldpos,normal,numSDFBlocks,d_sdfvalue);
-	cudaDeviceSynchronize();
+// __host__ HashData HashData::updatesdf(float3* worldpos, float3* normal, int numSDFBlocks){
+// 	HashData* d_hashData;
+//     cudaMalloc(&d_hashData, sizeof(HashData));
+//     cudaMemcpy(d_hashData, this, sizeof(HashData), cudaMemcpyHostToDevice);
+// 	int* d_sdfvalue;
+// 	cudaMalloc(&d_sdfvalue,sizeof(int)*numSDFBlocks);
+// 	dim3 blockSize(1024);
+// 	dim3 gridSize((numSDFBlocks + blockSize.x - 1) / blockSize.x);
+// 	updatesdfframe<<<gridSize,blockSize>>>(d_hashData,worldpos,normal,numSDFBlocks,d_sdfvalue);
+// 	cudaDeviceSynchronize();
 
 
-	cudaFree(d_hashData);
-	cudaFree(d_sdfvalue);
-}
+// 	cudaFree(d_hashData);
+// 	cudaFree(d_sdfvalue);
+// }
 
 #ifdef __CUDACC__
 // DONE: no problems for now. Calculate per-points signed distance to the surface.
@@ -465,7 +473,6 @@ __device__ void HashData::appendHeap(uint ptr) {
 
 // TODO: Need to change return type, return the hash entry just inserted. 
 // TODO: collision not considered for now.
-__device__ void HashData::insertHashEntryElement(const float3& WorldPos) {
 __device__ bool HashData::insertHashEntryElement(const float3& WorldPos) {
 	uint h = computeHashPos(WorldPos);
 	uint hp = h * c_hashParams.m_hashBucketSize;
@@ -494,7 +501,6 @@ __device__ bool HashData::insertHashEntryElement(const float3& WorldPos) {
 				atomicExch(&d_hashBucketMutex[h], FREE_ENTRY);
 				return true;
 			}
-			atomicExch(&d_hashBucketMutex[h], FREE_ENTRY);
 		}
 		return false;
 	}

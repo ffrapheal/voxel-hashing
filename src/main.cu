@@ -4,15 +4,15 @@
 #include <device_launch_parameters.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
-__global__ void test(HashData * hash,int * count,float * pos,int * num_points)
+__global__ void test(HashData * hash,int * count,float * pos,int num_points)
 {
     int idx=blockIdx.x*blockDim.x+threadIdx.x;
-    if(idx>=*num_points) return;
+    if(idx>=num_points) return;
     float3 worldpos=make_float3(pos[idx*3],pos[idx*3+1],pos[idx*3+2]);
     //assume (a b c) is the coordinate of a point.
     bool insert;
     int3 voxelpos = hash->worldToVirtualVoxelPos(worldpos);
-    uint hashpos=hash->computeHashPos(worldpos);
+    uint hashpos=hash->computeHashPos(worldpos); 
     insert=hash->insertHashEntryElement(worldpos);
     __threadfence();
     HashEntry curr = hash->getHashEntry(worldpos);
@@ -22,7 +22,6 @@ __global__ void test(HashData * hash,int * count,float * pos,int * num_points)
         atomicAdd(&count[0], 1);
         Voxel v = hash->getVoxel(worldpos);
     }
-    //printf("a:%d b:%d c:%d pos:%d ptr:%d insert:%s\n",voxelpos.x,voxelpos.y,voxelpos.z,pos,curr.ptr,insert ? "true" : "false");
     return;
 }
 
@@ -57,31 +56,37 @@ int main() {
     // 分配GPU内存
     float* device_points;
     cudaMalloc(&device_points, num_points * 3 * sizeof(float));
-    int* device_num_points;
-    cudaMalloc(&device_num_points,sizeof(int));
     // 复制数据到GPU
     cudaMemcpy(device_points, host_points, num_points * 3 * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(device_num_points, &num_points, sizeof(int), cudaMemcpyHostToDevice);
     delete[] host_points;
+
+
     HashData hash;
-    HashParams params;
     hash.allocate(true);
+
     HashData *d_hashdata;
+
     int count=0;
     int *d_count;
+
     cudaMalloc(&d_hashdata,sizeof(HashData));
     cudaMalloc(&d_count,sizeof(int));
+
     cudaMemcpy(d_hashdata,&hash,sizeof(HashData),cudaMemcpyHostToDevice);
     cudaMemcpy(d_count,&count,sizeof(int),cudaMemcpyHostToDevice);
+
     dim3 blockSize(1024);
     dim3 gridSize((num_points + blockSize.x - 1) / blockSize.x);
-    test<<<gridSize,blockSize>>>(d_hashdata,d_count,device_points,device_num_points);
+
+    test<<<gridSize,blockSize>>>(d_hashdata,d_count,device_points,num_points);
     cudaDeviceSynchronize();
     hash.free();
     cudaMemcpy(&count,d_count,sizeof(int),cudaMemcpyDeviceToHost);    
     std::cout<<"count: "<<count<<std::endl;
+    
     cudaFree(d_hashdata);
     cudaFree(device_points);
+    
     cudaFree(d_count);
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
