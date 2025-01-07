@@ -1,6 +1,9 @@
 {
     "C_Cpp.errorSquiggles": "disabled",
     "files.associations": {
-        "plyconfig.json": "jsonc"
+        "plyconfig.json": "jsonc",
+        "stdvector": "cpp",
+        "core": "cpp",
+        "cstddef": "cpp"
     }
 }
