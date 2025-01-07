@@ -4,6 +4,7 @@
 __constant__ HashParams c_hashParams;
 
 #define SDF_BLOCK_SIZE ((c_hashParams.m_SDFBlockSize))
+
 #ifndef MINF
 #define MINF __int_as_float(0xff800000)
 #endif

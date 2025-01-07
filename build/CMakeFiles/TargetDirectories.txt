@@ -1,3 +1,0 @@
-/home/zzz/code/hash/build/CMakeFiles/VoxelHash.dir
-/home/zzz/code/hash/build/CMakeFiles/edit_cache.dir
-/home/zzz/code/hash/build/CMakeFiles/rebuild_cache.dir
