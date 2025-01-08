@@ -14,6 +14,7 @@ find_package(PCL 1.8 REQUIRED)
 # 添加包含目录
 include_directories(
     ${PROJECT_SOURCE_DIR}/include
+    ${CUDA_INCLUDE_DIRS}
 )
 include_directories(${PCL_INCLUDE_DIRS})
 add_definitions(${PCL_DEFINITIONS})
@@ -21,6 +22,8 @@ add_definitions(${PCL_DEFINITIONS})
 set(SOURCES
     ${PROJECT_SOURCE_DIR}/src/main.cu
     ${PROJECT_SOURCE_DIR}/src/VoxelHash.cu
+    ${PROJECT_SOURCE_DIR}/src/CUDAMarchingCubesHashSDF.cpp
+    ${PROJECT_SOURCE_DIR}/src/CUDAMarchingCubesSDF.cu
 )
 
 # 添加可执行文件

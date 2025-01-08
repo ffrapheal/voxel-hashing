@@ -1,14 +1,8 @@
-#include "stdafx.h"
-
 #include "VoxelHash.h"
 #include "CUDAMarchingCubesHashSDF.h"
 
 extern "C" void resetMarchingCubesCUDA(MarchingCubesData& data);
-extern "C" void extractIsoSurfaceCUDA(const HashData& hashData,
-										 const MarchingCubesParams& params,
-										 MarchingCubesData& data);
-
-
+extern "C" void extractIsoSurfaceCUDA(const HashData& hashData, const MarchingCubesParams& params, MarchingCubesData& data);
 extern "C" void extractIsoSurfacePass1CUDA(const HashData& hashData, const MarchingCubesParams& params, MarchingCubesData& data);
 extern "C" void extractIsoSurfacePass2CUDA(const HashData& hashData, const MarchingCubesParams& params, MarchingCubesData& data, unsigned int numOccupiedBlocks);
 
@@ -35,10 +29,13 @@ void CUDAMarchingCubesHashSDF::extractIsoSurface(const HashData& hashData, const
 	m_params.m_boxEnabled = boxEnabled;
 	m_data.updateParams(m_params);
 
+    // get the number of occupied blocks, and save the bucket id of the occupied blocks to pass to pass 2
 	extractIsoSurfacePass1CUDA(hashData, m_params, m_data);
-	extractIsoSurfacePass2CUDA(hashData, m_params, m_data, m_data.getNumOccupiedBlocks());
+    // to extract the triangles, we need to traverse the occupied blocks, and do the marching cubes on each voxel in the occupied blocks.
+	extractIsoSurfacePass2CUDA(hashData, m_params, m_data, m_data.getNumOccupiedBlocks(), m_data.getOccupiedBlocks());
 }
-void export_ply(const std::string& filename)
+
+void CUDAMarchingCubesHashSDF::export_ply(const std::string& filename)
 {
     MarchingCubesData cpuData = m_data.copyToCPU();
     std::ofstream file_out { filename };
@@ -55,9 +52,9 @@ void export_ply(const std::string& filename)
     file_out << "end_header" << std::endl;
 
     for (int v_idx = 0; v_idx < cpuData.d_numTriangles[0]; ++v_idx) {
-        float3 v0 = cpuData.d_triangles[v_idx].v0;
-        float3 v1 = cpuData.d_triangles[v_idx].v1;
-        float3 v2 = cpuData.d_triangles[v_idx].v2;
+        float3 v0 = cpuData.d_triangles[v_idx].v0.p;
+        float3 v1 = cpuData.d_triangles[v_idx].v1.p;
+        float3 v2 = cpuData.d_triangles[v_idx].v2.p;
         file_out << v0.x << " " << v0.y << " " << v0.z << " ";
         file_out << v1.x << " " << v1.y << " " << v1.z << " ";
         file_out << v2.x << " " << v2.y << " " << v2.z << " ";

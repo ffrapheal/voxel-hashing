@@ -3,28 +3,8 @@
 
 #include "VoxelHash.h"
 #include "MarchingCubesSDFUtil.h"
-
-
-__global__ void resetMarchingCubesKernel(MarchingCubesData data) 
-{
-	*data.d_numTriangles = 0;
-	*data.d_numOccupiedBlocks = 0;	
-}
+#define T_PER_BLOCK 8
  
-__global__ void extractIsoSurfaceKernel(HashData hashData, MarchingCubesData data) 
-{
-	uint idx = blockIdx.x;
-
-	const HashEntry& entry = hashData.d_hash[idx];
-	if (entry.ptr != FREE_ENTRY) {
-		int3 pi_base = hashData.SDFBlockToVirtualVoxelPos(entry.pos);
-		int3 pi = pi_base + make_int3(threadIdx);
-		float3 worldPos = hashData.virtualVoxelPosToWorld(pi);
-
-		data.extractIsoSurfaceAtPosition(worldPos, hashData);
-	}
-}
-
 extern "C" void resetMarchingCubesCUDA(MarchingCubesData& data)
 {
 	const dim3 blockSize(1, 1, 1);
@@ -35,6 +15,12 @@ extern "C" void resetMarchingCubesCUDA(MarchingCubesData& data)
 	cutilSafeCall(cudaDeviceSynchronize());
 	cutilCheckMsg(__FUNCTION__);
 #endif
+}
+
+__global__ void resetMarchingCubesKernel(MarchingCubesData data) 
+{
+	*data.d_numTriangles = 0;
+	*data.d_numOccupiedBlocks = 0;	
 }
 
 extern "C" void extractIsoSurfaceCUDA(const HashData& hashData, const MarchingCubesParams& params, MarchingCubesData& data)
@@ -49,22 +35,18 @@ extern "C" void extractIsoSurfaceCUDA(const HashData& hashData, const MarchingCu
 	cutilCheckMsg(__FUNCTION__);
 #endif
 }
-#define T_PER_BLOCK 8
-__global__ void extractIsoSurfacePass1Kernel(HashData hashData, MarchingCubesData data)
+
+__global__ void extractIsoSurfaceKernel(HashData hashData, MarchingCubesData data) 
 {
-	const HashParams& hashParams = c_hashParams;
-	const unsigned int bucketID = blockIdx.x*blockDim.x + threadIdx.x;
+	uint idx = blockIdx.x;
 
+	const HashEntry& entry = hashData.d_hash[idx];
+	if (entry.ptr != FREE_ENTRY) {
+		int3 pi_base = hashData.SDFBlockToVirtualVoxelPos(entry.pos);
+		int3 pi = pi_base + make_int3(threadIdx);
+		float3 worldPos = hashData.virtualVoxelPosToWorld(pi);
 
-	if (bucketID < hashParams.m_hashNumBuckets*HASH_BUCKET_SIZE) {
-
-		HashEntry& entry = hashData.d_hash[bucketID];
-
-		if (entry.ptr != FREE_ENTRY) {
-
-			uint addr = atomicAdd(&data.d_numOccupiedBlocks[0], 1);
-			data.d_occupiedBlocks[addr] = bucketID;
-		}
+		data.extractIsoSurfaceAtPosition(worldPos, hashData);
 	}
 }
 
@@ -80,22 +62,21 @@ extern "C" void extractIsoSurfacePass1CUDA(const HashData& hashData, const March
 #endif
 }
 
-
-
-__global__ void extractIsoSurfacePass2Kernel(HashData hashData, MarchingCubesData data)
+__global__ void extractIsoSurfacePass1Kernel(HashData hashData, MarchingCubesData data)
 {
-	uint idx = data.d_occupiedBlocks[blockIdx.x];
+	const HashParams& hashParams = c_hashParams;
+	const unsigned int bucketID = blockIdx.x*blockDim.x + threadIdx.x;
 
-	const HashEntry& entry = hashData.d_hash[idx];
-	if (entry.ptr != FREE_ENTRY) {
-		int3 pi_base = hashData.SDFBlockToVirtualVoxelPos(entry.pos);
-		int3 pi = pi_base + make_int3(threadIdx);
-		float3 worldPos = hashData.virtualVoxelPosToWorld(pi);
 
-		data.extractIsoSurfaceAtPosition(worldPos, hashData);
+	if (bucketID < hashParams.m_hashNumBuckets*hashParams.m_hashBucketSize) {
+
+		HashEntry& entry = hashData.d_hash[bucketID];
+		if (entry.ptr != FREE_ENTRY) {
+			uint addr = atomicAdd(&data.d_numOccupiedBlocks[0], 1);
+			data.d_occupiedBlocks[addr] = bucketID;
+		}
 	}
 }
-
 
 extern "C" void extractIsoSurfacePass2CUDA(const HashData& hashData, const MarchingCubesParams& params, MarchingCubesData& data, unsigned int numOccupiedBlocks)
 {
@@ -109,4 +90,18 @@ extern "C" void extractIsoSurfacePass2CUDA(const HashData& hashData, const March
 	cutilSafeCall(cudaDeviceSynchronize());
 	cutilCheckMsg(__FUNCTION__);
 #endif
+}
+
+__global__ void extractIsoSurfacePass2Kernel(HashData hashData, MarchingCubesData data)
+{
+	uint idx = data.d_occupiedBlocks[blockIdx.x];
+
+	const HashEntry& entry = hashData.d_hash[idx];
+	if (entry.ptr != FREE_ENTRY) {
+		int3 pi_base = hashData.SDFBlockToVirtualVoxelPos(entry.pos);
+		int3 pi = pi_base + make_int3(threadIdx);
+		float3 worldPos = hashData.virtualVoxelPosToWorld(pi);
+
+		data.extractIsoSurfaceAtPosition(worldPos, hashData);
+	}
 }
