@@ -1,9 +1,55 @@
 #include <iostream>
+#include <fstream>
+#include <vector>
+#include <sstream>
+#include <string>
 #include "VoxelHash.h"
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
+#include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/point_types.h>
-#include <pcl/io/pcd_io.h>
+#include <pcl/point_cloud.h>
+#include <pcl/features/normal_3d.h>
+#include <pcl/search/kdtree.h>
+#include <eigen3/Eigen/src/Eigenvalues/SelfAdjointEigenSolver.h>
+#include "CUDAMarchingCubesHashSDF.h"
+#include <yaml-cpp/yaml.h>
+extern __constant__ HashParams c_hashParams;
+
+struct PointXYZINormal {
+    float x, y, z;
+    float intensity;
+    float normal_x, normal_y, normal_z;
+};
+
+bool loadPCDFile(const std::string& filename, std::vector<PointXYZINormal>& points) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open file: " << filename << std::endl;
+        return false;
+    }
+
+    std::string line;
+    bool header = true;
+    while (std::getline(file, line)) {
+        if (header) {
+            if (line == "DATA ascii") {
+                header = false;
+            }
+            continue;
+        }
+
+        std::istringstream iss(line);
+        PointXYZINormal point;
+        if (!(iss >> point.x >> point.y >> point.z >> point.intensity >> point.normal_x >> point.normal_y >> point.normal_z)) {
+            break;
+        }
+        points.push_back(point);
+    }
+
+    file.close();
+    return true;
+}
 
 __global__ void test(HashData * hash,int * count,float * pos,int num_points)
 {
@@ -34,29 +80,42 @@ void checkCudaError(cudaError_t err) {
 }
 
 int main() {
-    pcl::PointCloud<pcl::PointXYZINormal>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZINormal>);
-    printf("hello world\n");
-    // read pcd file
-    if (pcl::io::loadPCDFile<pcl::PointXYZINormal>("/home/zzz/code/hash/point_cloud_7377_points.pcd", *cloud) == -1) // 这里替换为你的PCD文件路径
-    {
-        PCL_ERROR("failed to read pcd file \n");
+    std::vector<PointXYZINormal> cloud;
+    if (!loadPCDFile("/home/hmy/voxel_hashing_dev/point_cloud_7377_points.pcd", cloud)) {
+        std::cerr << "Failed to read PCD file" << std::endl;
         return -1;
     }
-    // print point cloud info
-    std::cout << "point cloud width: " << cloud->width << std::endl;
-    std::cout << "point cloud height: " << cloud->height << std::endl;
-    std::cout << "point cloud size: " << cloud->points.size() << std::endl;
-    // traverse each point in point cloud
-    size_t num_points = cloud->points.size();
-    float3* host_points = new float3[num_points]; // 每个点的坐标
-    float3* host_normals = new float3[num_points]; // 每个点的法线
+
+    std::cout << "Point cloud size: " << cloud.size() << std::endl;
+    size_t num_points = cloud.size();
+    float3* host_points = new float3[num_points];
+    float3* host_normals = new float3[num_points];
+
+    // 使用更快的方法计算法线
+    pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ptr(new pcl::PointCloud<pcl::PointXYZ>());
+    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals(new pcl::PointCloud<pcl::Normal>());
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>());
+
+    for (size_t j = 0; j < num_points; ++j) {
+        pcl::PointXYZ point;
+        point.x = cloud[j].x;
+        point.y = cloud[j].y;
+        point.z = cloud[j].z;
+        cloud_ptr->points.push_back(point);
+    }
+
+    tree->setInputCloud(cloud_ptr);
+    ne.setInputCloud(cloud_ptr);
+    ne.setSearchMethod(tree);
+    ne.setKSearch(5);
+    ne.compute(*cloud_normals);
 
     for (size_t i = 0; i < num_points; ++i) {
-        host_points[i] = make_float3(cloud->points[i].x, cloud->points[i].y, cloud->points[i].z);
-        host_normals[i] = make_float3(cloud->points[i].normal_x, cloud->points[i].normal_y, cloud->points[i].normal_z);
-        printf("point: %f %f %f\n", host_points[i].x, host_points[i].y, host_points[i].z);
-        //printf("normal: %f %f %f\n", host_normals[i].x, host_normals[i].y, host_normals[i].z);
+        host_points[i] = make_float3(cloud[i].x, cloud[i].y, cloud[i].z);
+        host_normals[i] = make_float3(cloud_normals->points[i].normal_x, cloud_normals->points[i].normal_y, cloud_normals->points[i].normal_z);
     }
+
     // allocate memory on gpu
     float3* device_points;
     cudaMalloc(&device_points, num_points * sizeof(float3));
@@ -88,17 +147,37 @@ int main() {
     // test<<<gridSize,blockSize>>>(d_hashdata,d_count,device_points,num_points);
     updatesdfframe<<<gridSize,blockSize>>>(d_hashdata,device_points,device_normals,num_points);
     cudaDeviceSynchronize();
+
+    // Marching Cubes to extract mesh
+    MarchingCubesParams mcParams = CUDAMarchingCubesHashSDF::parametersFromGlobalAppState(10000000, 0, 0.05, 2000000);
+    CUDAMarchingCubesHashSDF marchingCubes(mcParams);
+    HashParams hashParams;
+    YAML::Node config = YAML::LoadFile("/home/hmy/voxel_hashing_dev/config/hash_params.yaml");
+    hashParams.m_hashNumBuckets = config["hashNumBuckets"].as<unsigned int>();
+    hashParams.m_hashBucketSize = config["hashBucketSize"].as<unsigned int>();
+    hashParams.m_SDFBlockSize = config["SDFBlockSize"].as<unsigned int>();
+    hashParams.m_virtualVoxelSize = config["virtualVoxelSize"].as<float>();
+    hashParams.m_maxIntegrationDistance = config["maxIntegrationDistance"].as<float>();
+    hashParams.m_truncScale = config["truncScale"].as<float>();
+    hashParams.m_truncation = config["truncation"].as<float>();
+    hashParams.m_integrationWeightSample = config["integrationWeightSample"].as<float>();
+    hashParams.m_integrationWeightMax = config["integrationWeightMax"].as<float>();
+    
+    marchingCubes.extractIsoSurface(hash, hashParams, vec3f(0.0f, 0.0f, 0.0f), vec3f(1.0f, 1.0f, 1.0f), false);
+    cudaDeviceSynchronize();
+    marchingCubes.export_ply("output_mesh.ply");
+
     hash.free();
     cudaMemcpy(&count,d_count,sizeof(int),cudaMemcpyDeviceToHost);    
     std::cout<<"count: "<<count<<std::endl;
     
-    cudaFree(d_hashdata);
-    cudaFree(device_points);
-    
-    cudaFree(d_count);
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess) {
-        printf("CUDA error after kernel launch: %s\n", cudaGetErrorString(err));
-    }
+    // cudaFree(d_hashdata);
+    // cudaFree(device_points);
+    // cudaFree(device_normals);
+    // cudaFree(d_count);
+    // cudaError_t err = cudaGetLastError();
+    // if (err != cudaSuccess) {
+    //     printf("CUDA error after kernel launch: %s\n", cudaGetErrorString(err));
+    // }
     return 0;
 }

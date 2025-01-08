@@ -24,7 +24,7 @@ public:
 		params.m_maxNumTriangles = s_marchingCubesMaxNumTriangles;
 		params.m_threshMarchingCubes = s_SDFMarchingCubeThreshFactor*s_SDFVoxelSize;
 		params.m_threshMarchingCubes2 = s_SDFMarchingCubeThreshFactor*s_SDFVoxelSize;
-		//params.m_sdfBlockSize = SDF_BLOCK_SIZE;
+		params.m_sdfBlockSize = 8;
 		//params.m_hashBucketSize = HASH_BUCKET_SIZE;
 		params.m_hashNumBuckets = s_hashNumBuckets;
 		return params;

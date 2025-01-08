@@ -6,6 +6,7 @@
 #include "Tables.h"
 #include "VoxelHash.h"
 extern __constant__ HashParams c_hashParams;
+
 struct MarchingCubesParams {
 	bool m_boxEnabled;
 	float3 m_minCorner;
@@ -155,6 +156,7 @@ struct MarchingCubesData {
 	__device__
 	void extractIsoSurfaceAtPosition(const float3& worldPos, const HashData& hashData)
 	{
+		printf("extractIsoSurfaceAtPosition\n");
 		const HashParams& hashParams = c_hashParams;
 		const MarchingCubesParams& params = *d_params;
 
@@ -192,28 +194,28 @@ struct MarchingCubesData {
 
 		const float thres = params.m_threshMarchingCubes;
 		float distArray[] = {dist000, dist100, dist010, dist001, dist110, dist011, dist101, dist111};
-		for(uint k = 0; k < 8; k++) {
-			for(uint l = 0; l < 8; l++) {
-				if(distArray[k]*distArray[l] < 0.0f) {
-					if(abs(distArray[k]) + abs(distArray[l]) > thres) return;
-				}
-				else {
-					if(abs(distArray[k]-distArray[l]) > thres) return;
-				}
-			}
-		}
+		// for(uint k = 0; k < 8; k++) {
+		// 	for(uint l = 0; l < 8; l++) {
+		// 		if(distArray[k]*distArray[l] < 0.0f) {
+		// 			if(abs(distArray[k]) + abs(distArray[l]) > thres) return;
+		// 		}
+		// 		else {
+		// 			if(abs(distArray[k]-distArray[l]) > thres) return;
+		// 		}
+		// 	}
+		// }
 
-		if(abs(dist000) > params.m_threshMarchingCubes2) return;
-		if(abs(dist100) > params.m_threshMarchingCubes2) return;
-		if(abs(dist010) > params.m_threshMarchingCubes2) return;
-		if(abs(dist001) > params.m_threshMarchingCubes2) return;
-		if(abs(dist110) > params.m_threshMarchingCubes2) return;
-		if(abs(dist011) > params.m_threshMarchingCubes2) return;
-		if(abs(dist101) > params.m_threshMarchingCubes2) return;
-		if(abs(dist111) > params.m_threshMarchingCubes2) return;
+		// if(abs(dist000) > params.m_threshMarchingCubes2) return;
+		// if(abs(dist100) > params.m_threshMarchingCubes2) return;
+		// if(abs(dist010) > params.m_threshMarchingCubes2) return;
+		// if(abs(dist001) > params.m_threshMarchingCubes2) return;
+		// if(abs(dist110) > params.m_threshMarchingCubes2) return;
+		// if(abs(dist011) > params.m_threshMarchingCubes2) return;
+		// if(abs(dist101) > params.m_threshMarchingCubes2) return;
+		// if(abs(dist111) > params.m_threshMarchingCubes2) return;
 
-		if(edgeTable[cubeindex] == 0 || edgeTable[cubeindex] == 255) return; // added by me edgeTable[cubeindex] == 255
-
+		// if(edgeTable[cubeindex] == 0 || edgeTable[cubeindex] == 255) return; // added by me edgeTable[cubeindex] == 255
+		printf("Here\n");
 		Voxel* v = hashData.getVoxel(worldPos);
 
 		Vertex vertlist[12];

@@ -104,7 +104,7 @@ __host__ void HashData::initializeHashParams(HashParams& params, const std::stri
 // DONE: no problems for now.
 __host__ void HashData::allocate(bool dataOnGPU) {
 	HashParams params;
-	initializeHashParams(params, "/home/zzz/code/hash/config/hash_params.yaml");
+	initializeHashParams(params, "/home/hmy/voxel_hashing_dev/config/hash_params.yaml");
 	m_bIsOnGPU = dataOnGPU;
 	if (m_bIsOnGPU) {
 		// allocate memory for heap, heap counter.
