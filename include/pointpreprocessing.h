@@ -29,7 +29,7 @@ struct point_count
 // because in the test the voxel size has not determined, so we use 0.05 as the voxel size.
 __device__
 int3 worldToVirtualVoxelPos(const float3& pos) {
-	const float3 p = pos / 0.05;
+	const float3 p = pos / 0.5;
 	return make_int3(p + make_float3(sign(p)) * 0.5f);
 }
 
@@ -56,7 +56,38 @@ void pointpreprocessing(point_count *device_points, point_block *point_blocks, i
 }
 
 __host__
-std::vector<float3> host_pointpreprocessing(std::vector<point_count>& point_counts)
+float3 computeNormal(const std::vector<point_count> points,int start_index,int end_index,point_block* host_points) {
+    // 至少需要3个点才能计算法线
+    if (end_index - start_index < 3) {
+        return make_float3(0.0f, 0.0f, 0.0f);
+    }
+
+    // 将点转换为Eigen矩阵
+    Eigen::MatrixXf points_matrix(end_index - start_index, 3);
+    for (size_t i = start_index; i < end_index; i++) {
+        points_matrix(i - start_index, 0) = points[host_points[i].point_index].worldpos.x;
+        points_matrix(i - start_index, 1) = points[host_points[i].point_index].worldpos.y;
+        points_matrix(i - start_index, 2) = points[host_points[i].point_index].worldpos.z;
+    }
+    // 计算质心
+    Eigen::Vector3f centroid = points_matrix.colwise().mean();
+    
+    // 构建协方差矩阵
+    Eigen::MatrixXf centered = points_matrix.rowwise() - centroid.transpose();
+    Eigen::Matrix3f covariance = (centered.transpose() * centered) / float(points_matrix.rows() - 1);
+    
+    // 计算特征值和特征向量
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eigen_solver(covariance);
+    Eigen::Vector3f normal = eigen_solver.eigenvectors().col(0) ;
+
+
+    // 转换回float3
+    return make_float3(normal.x(), normal.y(), normal.z());
+}
+
+
+__host__
+std::vector<float3> host_pointpreprocessing(std::vector<point_count>& point_counts,std::vector<float3>& normals)
 {
     // read pcd file from new frame.
     std::vector<float3> valid_points;
@@ -85,12 +116,13 @@ std::vector<float3> host_pointpreprocessing(std::vector<point_count>& point_coun
 
     // copy points to device.
     point_count* device_points;
+    point_block* device_point_blocks;
     cudaMalloc(&device_points, points.size() * sizeof(point_count));
+    cudaMalloc(&device_point_blocks, points.size() * sizeof(point_block));
     cudaMemcpy(device_points, points.data(), points.size() * sizeof(point_count), cudaMemcpyHostToDevice);
+    
     dim3 block_size(1024, 1, 1);
     dim3 grid_size((points.size() + block_size.x - 1) / block_size.x, 1, 1);
-    point_block* device_point_blocks;
-    cudaMalloc(&device_point_blocks, points.size() * sizeof(point_block));
     pointpreprocessing<<<grid_size, block_size>>>(device_points, device_point_blocks, points.size());
 
     // sort the point_blocks using thrust
@@ -110,8 +142,10 @@ std::vector<float3> host_pointpreprocessing(std::vector<point_count>& point_coun
     }
     int first_block_size = block_change_indices[0];
     if(first_block_size >= thereshold) {
+        float3 normal = computeNormal(points,0,block_change_indices[0],host_point_blocks);
         for(int j = 0; j < block_change_indices[0]; j++) {
             valid_points.push_back(points[host_point_blocks[j].point_index].worldpos);
+            normals.push_back(normal);
         }
     } else {
         for(int j = 0; j < block_change_indices[0]; j++) {
@@ -123,9 +157,11 @@ std::vector<float3> host_pointpreprocessing(std::vector<point_count>& point_coun
     for(int i = 0; i < block_change_indices.size()-1; i++) {
         int block_size = block_change_indices[i+1] - block_change_indices[i];
         if(block_size >= thereshold) {
+            float3 normal = computeNormal(points,block_change_indices[i],block_change_indices[i+1],host_point_blocks);
             // 将连续5个以上的点加入filtered_points
             for(int j = block_change_indices[i]; j < block_change_indices[i+1]; j++) {
                 valid_points.push_back(points[host_point_blocks[j].point_index].worldpos);
+                normals.push_back(normal);
             }
         } else {
             // 将少于5个连续点的加入remaining_points
@@ -139,8 +175,10 @@ std::vector<float3> host_pointpreprocessing(std::vector<point_count>& point_coun
     int last_block_start = block_change_indices[block_change_indices.size()-1];
     int last_block_size = points.size() - last_block_start;
     if(last_block_size >= thereshold) {
+        float3 normal = computeNormal(points,last_block_start,points.size(),host_point_blocks);
         for(int j = last_block_start; j < points.size(); j++) {
             valid_points.push_back(points[host_point_blocks[j].point_index].worldpos);
+            normals.push_back(normal);
         }
     } else {
         for(int j = last_block_start; j < points.size(); j++) {
@@ -150,6 +188,11 @@ std::vector<float3> host_pointpreprocessing(std::vector<point_count>& point_coun
     
     // 更新输出的point_counts
     point_counts = next_points;
+    // 清理内存
+    delete[] host_point_blocks;
+    cudaFree(device_points);
+    cudaFree(device_point_blocks);
+    
     return valid_points;
 }
 
