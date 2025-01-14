@@ -25,12 +25,12 @@ public:
 		params.m_threshMarchingCubes = s_SDFMarchingCubeThreshFactor*s_SDFVoxelSize;
 		params.m_threshMarchingCubes2 = s_SDFMarchingCubeThreshFactor*s_SDFVoxelSize;
 		params.m_sdfBlockSize = 8;
-		//params.m_hashBucketSize = HASH_BUCKET_SIZE;
+		params.m_hashBucketSize = 10;
 		params.m_hashNumBuckets = s_hashNumBuckets;
 		return params;
 	}
 
-	void extractIsoSurface(const HashData& hashData, const HashParams& hashParams, const vec3f& minCorner = vec3f(0.0f, 0.0f, 0.0f), const vec3f& maxCorner = vec3f(0.0f, 0.0f, 0.0f), bool boxEnabled = false);
+	void extractIsoSurface(const HashData& hashData, const vec3f& minCorner = vec3f(0.0f, 0.0f, 0.0f), const vec3f& maxCorner = vec3f(0.0f, 0.0f, 0.0f), bool boxEnabled = false);
 	void export_ply(const std::string& filename);
 private:
 	void create(const MarchingCubesParams& params);

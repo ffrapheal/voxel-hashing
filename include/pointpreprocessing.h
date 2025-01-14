@@ -18,13 +18,13 @@ struct point_block
         return block_index < other.block_index;
     }
 };
+
 struct point_count
 {
     int count;
     float3 worldpos;
     point_count(int count, float3 worldpos) : count(count), worldpos(worldpos) {}
 };
-
 
 // because in the test the voxel size has not determined, so we use 0.05 as the voxel size.
 __device__
@@ -85,7 +85,6 @@ float3 computeNormal(const std::vector<point_count> points,int start_index,int e
     return make_float3(normal.x(), normal.y(), normal.z());
 }
 
-
 __host__
 std::vector<float3> host_pointpreprocessing(std::vector<point_count>& point_counts,std::vector<float3>& normals)
 {
@@ -124,7 +123,7 @@ std::vector<float3> host_pointpreprocessing(std::vector<point_count>& point_coun
     dim3 block_size(1024, 1, 1);
     dim3 grid_size((points.size() + block_size.x - 1) / block_size.x, 1, 1);
     pointpreprocessing<<<grid_size, block_size>>>(device_points, device_point_blocks, points.size());
-
+    cudaDeviceSynchronize();
     // sort the point_blocks using thrust
     thrust::device_ptr<point_block> thrust_point_blocks = thrust::device_pointer_cast(device_point_blocks);
     thrust::sort(thrust_point_blocks, thrust_point_blocks + points.size());

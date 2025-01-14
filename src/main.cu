@@ -14,132 +14,106 @@
 #include <eigen3/Eigen/src/Eigenvalues/SelfAdjointEigenSolver.h>
 #include "CUDAMarchingCubesHashSDF.h"
 #include <yaml-cpp/yaml.h>
-extern __constant__ HashParams c_hashParams;
+#include <pcl/io/pcd_io.h>
+#include <unordered_map>
+#include "pointpreprocessing.h"
+std::unordered_map<int, int3> map;
+#define hash_max 100000000
 
-struct PointXYZINormal {
-    float x, y, z;
-    float intensity;
-    float normal_x, normal_y, normal_z;
-};
 
-bool loadPCDFile(const std::string& filename, std::vector<PointXYZINormal>& points) {
-    std::ifstream file(filename);
-    if (!file.is_open()) {
-        std::cerr << "Failed to open file: " << filename << std::endl;
-        return false;
-    }
+// int count =0;
 
-    std::string line;
-    bool header = true;
-    while (std::getline(file, line)) {
-        if (header) {
-            if (line == "DATA ascii") {
-                header = false;
-            }
-            continue;
-        }
+// void pointpreprocessing(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, float voxel_size)
+// {
+//     // int idx = blockIdx.x * blockDim.x + threadIdx.x;
+//     // if (idx >= cloud.size()) return;
+//     // float3 world_point = make_float3(cloud[idx].x, cloud[idx].y, cloud[idx].z);
+//     // HashData hash_data;
 
-        std::istringstream iss(line);
-        PointXYZINormal point;
-        if (!(iss >> point.x >> point.y >> point.z >> point.intensity >> point.normal_x >> point.normal_y >> point.normal_z)) {
-            break;
-        }
-        points.push_back(point);
-    }
 
-    file.close();
-    return true;
-}
+//     // int3 index = worldtovirualvoxelindex(world_point, voxel_size);
+//     // point_blocks[idx].block_index = index.x;
+//     // point_blocks[idx].point_index = idx;
+//     // test hash colision
+//     for(int i = 0; i < cloud->size(); i++){
+//         int3 virtualVoxelPos = worldToVirtualVoxelPos(make_float3(cloud->points[i].x, cloud->points[i].y, cloud->points[i].z));
+//         int a = computeHashPos(virtualVoxelPos);
+//         printf("a: %d\n",a);
+//         printf("virtualVoxelPos: %d %d %d\n",virtualVoxelPos.x,virtualVoxelPos.y,virtualVoxelPos.z);
+//         if(map.find(a) != map.end()){
+//             if(map[a].x!=virtualVoxelPos.x || map[a].y!=virtualVoxelPos.y || map[a].z!=virtualVoxelPos.z){
+//                 count++;
+//             }
+//         }
+//         else
+//         {
+//             map[a] = virtualVoxelPos;
+//         }
+//     }
 
-__global__ void test(HashData * hash,int * count,float * pos,int num_points)
-{
-    int idx=blockIdx.x*blockDim.x+threadIdx.x;
-    if(idx>=num_points) return;
-    float3 worldpos=make_float3(pos[idx*3],pos[idx*3+1],pos[idx*3+2]);
-    //assume (a b c) is the coordinate of a point.
-    int3 voxelpos = hash->worldToVirtualVoxelPos(worldpos);
-    uint hashpos=hash->computeHashPos(worldpos);
-    hash->insertHashEntryElement(worldpos);
-    __threadfence();
-    HashEntry curr = hash->getHashEntryForWorldPos(worldpos);
-    uint h = hash->computeHashPos(worldpos);
-    if(curr.ptr!=FREE_ENTRY)
-    {
-        atomicAdd(&count[0], 1);
-        Voxel * v = hash->getVoxel(worldpos);
-        printf("voxelpos: %d %d %d\n",voxelpos.x,voxelpos.y,voxelpos.z);
-        printf("voxel: %f %f %f\n",v->sdf_sum,v->weight_sum,v->sdf_sum/v->weight_sum);
-    }
-    return;
-}
-
-void checkCudaError(cudaError_t err) {
-    if (err != cudaSuccess) {
-        std::cout << "CUDA error: " << cudaGetErrorString(err) << std::endl;
-    }
-}
+//     std::cout << "hash colision count: " << count << std::endl;
+// }
 
 int main() {
-    std::vector<PointXYZINormal> cloud;
-    if (!loadPCDFile("/home/hmy/voxel_hashing_dev/point_cloud_7377_points.pcd", cloud)) {
-        std::cerr << "Failed to read PCD file" << std::endl;
-        return -1;
-    }
 
-    std::cout << "Point cloud size: " << cloud.size() << std::endl;
-    size_t num_points = cloud.size();
+    // 生成10000个随机点
+    const int num_points = 10000;
     float3* host_points = new float3[num_points];
     float3* host_normals = new float3[num_points];
 
-    // 使用更快的方法计算法线
-    pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ptr(new pcl::PointCloud<pcl::PointXYZ>());
-    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals(new pcl::PointCloud<pcl::Normal>());
-    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>());
+    // 设置平面参数 (假设是xz平面,y=1)
+    float3 plane_normal = make_float3(0.0f, 1.0f, 0.0f);
+    float plane_d = 1.0f;
 
-    for (size_t j = 0; j < num_points; ++j) {
-        pcl::PointXYZ point;
-        point.x = cloud[j].x;
-        point.y = cloud[j].y;
-        point.z = cloud[j].z;
-        cloud_ptr->points.push_back(point);
+    // 随机数生成器
+    srand(time(NULL));
+
+    // 生成随机点和法向量
+    for(int i = 0; i < num_points; i++) {
+        // 在xz平面上随机生成点
+        float x = (float)rand() / RAND_MAX * 2.0f - 1.0f; // [-1,1]范围
+        float z = (float)rand() / RAND_MAX * 2.0f - 1.0f;
+        
+        // 添加高斯噪声到y坐标
+        float gaussian_noise = 0;
+        for(int j = 0; j < 12; j++) {
+            gaussian_noise += ((float)rand() / RAND_MAX - 0.5f);
+        }
+        gaussian_noise *= 0.02f; // 缩放噪声
+        
+        float y = plane_d + gaussian_noise;
+        
+        host_points[i] = make_float3(x, y, z);
+        host_normals[i] = plane_normal;
     }
 
-    tree->setInputCloud(cloud_ptr);
-    ne.setInputCloud(cloud_ptr);
-    ne.setSearchMethod(tree);
-    ne.setKSearch(5);
-    ne.compute(*cloud_normals);
-
-    for (size_t i = 0; i < num_points; ++i) {
-        host_points[i] = make_float3(cloud[i].x, cloud[i].y, cloud[i].z);
-        host_normals[i] = make_float3(cloud_normals->points[i].normal_x, cloud_normals->points[i].normal_y, cloud_normals->points[i].normal_z);
-    }
-
-    // allocate memory on gpu
+    // 分配GPU内存
     float3* device_points;
+    float3* device_normals;
     cudaMalloc(&device_points, num_points * sizeof(float3));
-    float3* device_normals;  
     cudaMalloc(&device_normals, num_points * sizeof(float3));
-    // copy data to gpu
+
+    // 将数据复制到GPU
     cudaMemcpy(device_points, host_points, num_points * sizeof(float3), cudaMemcpyHostToDevice);
     cudaMemcpy(device_normals, host_normals, num_points * sizeof(float3), cudaMemcpyHostToDevice);
+
+    // 释放主机内存
     delete[] host_points;
     delete[] host_normals;
-    // initialize hash data
+    
     HashData hash;
     hash.allocate(true);
 
     HashData *d_hashdata;
 
-    int count=0;
-    int *d_count;
+    float count=0;
+    float *d_count;
 
     cudaMalloc(&d_hashdata,sizeof(HashData));
-    cudaMalloc(&d_count,sizeof(int));
+    cudaMalloc(&d_count,sizeof(float));
 
     cudaMemcpy(d_hashdata,&hash,sizeof(HashData),cudaMemcpyHostToDevice);
-    cudaMemcpy(d_count,&count,sizeof(int),cudaMemcpyHostToDevice);
+    cudaMemcpy(d_count,&count,sizeof(float),cudaMemcpyHostToDevice);
 
     dim3 blockSize(1024);
     dim3 gridSize((num_points + blockSize.x - 1) / blockSize.x);
@@ -147,37 +121,25 @@ int main() {
     // test<<<gridSize,blockSize>>>(d_hashdata,d_count,device_points,num_points);
     updatesdfframe<<<gridSize,blockSize>>>(d_hashdata,device_points,device_normals,num_points);
     cudaDeviceSynchronize();
-
+    updatesdfframe<<<gridSize,blockSize>>>(d_hashdata,device_points,device_normals,num_points);
+    cudaDeviceSynchronize();
+    updatesdfframe<<<gridSize,blockSize>>>(d_hashdata,device_points,device_normals,num_points);
+    cudaDeviceSynchronize();
     // Marching Cubes to extract mesh
     MarchingCubesParams mcParams = CUDAMarchingCubesHashSDF::parametersFromGlobalAppState(10000000, 0, 0.05, 2000000);
     CUDAMarchingCubesHashSDF marchingCubes(mcParams);
-    HashParams hashParams;
-    YAML::Node config = YAML::LoadFile("/home/hmy/voxel_hashing_dev/config/hash_params.yaml");
-    hashParams.m_hashNumBuckets = config["hashNumBuckets"].as<unsigned int>();
-    hashParams.m_hashBucketSize = config["hashBucketSize"].as<unsigned int>();
-    hashParams.m_SDFBlockSize = config["SDFBlockSize"].as<unsigned int>();
-    hashParams.m_virtualVoxelSize = config["virtualVoxelSize"].as<float>();
-    hashParams.m_maxIntegrationDistance = config["maxIntegrationDistance"].as<float>();
-    hashParams.m_truncScale = config["truncScale"].as<float>();
-    hashParams.m_truncation = config["truncation"].as<float>();
-    hashParams.m_integrationWeightSample = config["integrationWeightSample"].as<float>();
-    hashParams.m_integrationWeightMax = config["integrationWeightMax"].as<float>();
     
-    marchingCubes.extractIsoSurface(hash, hashParams, vec3f(0.0f, 0.0f, 0.0f), vec3f(1.0f, 1.0f, 1.0f), false);
+    marchingCubes.extractIsoSurface(hash, vec3f(0.0f, 0.0f, 0.0f), vec3f(1.0f, 1.0f, 1.0f), false);
     cudaDeviceSynchronize();
     marchingCubes.export_ply("output_mesh.ply");
 
     hash.free();
     cudaMemcpy(&count,d_count,sizeof(int),cudaMemcpyDeviceToHost);    
-    std::cout<<"count: "<<count<<std::endl;
-    
-    // cudaFree(d_hashdata);
-    // cudaFree(device_points);
-    // cudaFree(device_normals);
-    // cudaFree(d_count);
-    // cudaError_t err = cudaGetLastError();
-    // if (err != cudaSuccess) {
-    //     printf("CUDA error after kernel launch: %s\n", cudaGetErrorString(err));
-    // }
+    // std::cout<<"count: "<<count<<std::endl;
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        printf("CUDA error after kernel launch: %s\n", cudaGetErrorString(err));
+    }
+
     return 0;
 }

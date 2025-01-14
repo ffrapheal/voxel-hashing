@@ -21,7 +21,7 @@ void CUDAMarchingCubesHashSDF::destroy(void)
 	m_data.free();
 }
 
-void CUDAMarchingCubesHashSDF::extractIsoSurface(const HashData& hashData, const HashParams& hashParams, const vec3f& minCorner, const vec3f& maxCorner, bool boxEnabled)
+void CUDAMarchingCubesHashSDF::extractIsoSurface(const HashData& hashData, const vec3f& minCorner, const vec3f& maxCorner, bool boxEnabled)
 {
 	resetMarchingCubesCUDA(m_data);
 	float3 maxc = {maxCorner.x,maxCorner.y,maxCorner.z};
@@ -30,15 +30,18 @@ void CUDAMarchingCubesHashSDF::extractIsoSurface(const HashData& hashData, const
 	m_params.m_minCorner = minc;
 	m_params.m_boxEnabled = boxEnabled;
 	m_data.updateParams(m_params);
-
+    //printf("1\n");
     // get the number of occupied blocks, and save the bucket id of the occupied blocks to pass to pass 2
 	extractIsoSurfacePass1CUDA(hashData, m_params, m_data);
     cudaCheckError(cudaGetLastError());
-    printf("occupied blocks: %d\n", m_data.getNumOccupiedBlocks());
+    //printf("occupied blocks: %d\n", m_data.getNumOccupiedBlocks());
     // to extract the triangles, we need to traverse the occupied blocks, and do the marching cubes on each voxel in the occupied blocks.
-	extractIsoSurfacePass2CUDA(hashData, m_params, m_data, m_data.getNumOccupiedBlocks());
+    //printf("2\n");
+    printf("m_data.getNumOccupiedBlocks(): %d\n", m_data.getNumOccupiedBlocks());
+    extractIsoSurfacePass2CUDA(hashData, m_params, m_data, m_data.getNumOccupiedBlocks());
     cudaCheckError(cudaGetLastError());
-    printf("In CUDAMarchingCubesHashSDF::extractIsoSurface, after extractIsoSurfacePass2CUDA\n");
+    //printf("3\n");
+    //printf("In CUDAMarchingCubesHashSDF::extractIsoSurface, after extractIsoSurfacePass2CUDA\n");
 }
 
 void CUDAMarchingCubesHashSDF::export_ply(const std::string& filename)

@@ -156,7 +156,7 @@ struct MarchingCubesData {
 	__device__
 	void extractIsoSurfaceAtPosition(const float3& worldPos, const HashData& hashData)
 	{
-		printf("extractIsoSurfaceAtPosition\n");
+		//printf("extractIsoSurfaceAtPosition\n");
 		const HashParams& hashParams = c_hashParams;
 		const MarchingCubesParams& params = *d_params;
 
@@ -165,13 +165,14 @@ struct MarchingCubesData {
 		}
 
 		const float isolevel = 0.0f;
-
+		//printf("extractIsoSurfaceAtPosition 1\n");
 		// becuase the worldPos is the center of the voxel, we need to get the 8 vertices of the voxel, that is P M here to do.
 		const float P = hashParams.m_virtualVoxelSize/2.0f;
 		const float M = -P;
-
+		//printf("extractIsoSurfaceAtPosition 2\n");
 		//get vertice and wo need to check if the vertice is valid, notice: the vertice pos is in the border of this voxel. we need to  
 		float3 p000 = worldPos+make_float3(M, M, M); float dist000; bool valid000 = trilinearInterpolationSimpleFastFast(hashData, p000, dist000);
+		//printf("extractIsoSurfaceAtPosition 2.1\n");
 		float3 p100 = worldPos+make_float3(P, M, M); float dist100; bool valid100 = trilinearInterpolationSimpleFastFast(hashData, p100, dist100);
 		float3 p010 = worldPos+make_float3(M, P, M); float dist010; bool valid010 = trilinearInterpolationSimpleFastFast(hashData, p010, dist010);
 		float3 p001 = worldPos+make_float3(M, M, P); float dist001; bool valid001 = trilinearInterpolationSimpleFastFast(hashData, p001, dist001);
@@ -179,9 +180,8 @@ struct MarchingCubesData {
 		float3 p011 = worldPos+make_float3(M, P, P); float dist011; bool valid011 = trilinearInterpolationSimpleFastFast(hashData, p011, dist011);
 		float3 p101 = worldPos+make_float3(P, M, P); float dist101; bool valid101 = trilinearInterpolationSimpleFastFast(hashData, p101, dist101);
 		float3 p111 = worldPos+make_float3(P, P, P); float dist111; bool valid111 = trilinearInterpolationSimpleFastFast(hashData, p111, dist111);
-
-		if(!valid000 || !valid100 || !valid010 || !valid001 || !valid110 || !valid011 || !valid101 || !valid111) return;
-
+		//printf("extractIsoSurfaceAtPosition 3\n");
+		//if(!valid000 || !valid100 || !valid010 || !valid001 || !valid110 || !valid011 || !valid101 || !valid111) return;
 		uint cubeindex = 0;
 		if(dist010 < isolevel) cubeindex += 1;
 		if(dist110 < isolevel) cubeindex += 2;
@@ -191,7 +191,6 @@ struct MarchingCubesData {
 		if(dist111 < isolevel) cubeindex += 32;
 		if(dist101 < isolevel) cubeindex += 64;
 		if(dist001 < isolevel) cubeindex += 128;
-
 		const float thres = params.m_threshMarchingCubes;
 		float distArray[] = {dist000, dist100, dist010, dist001, dist110, dist011, dist101, dist111};
 		// for(uint k = 0; k < 8; k++) {
@@ -215,7 +214,6 @@ struct MarchingCubesData {
 		// if(abs(dist111) > params.m_threshMarchingCubes2) return;
 
 		// if(edgeTable[cubeindex] == 0 || edgeTable[cubeindex] == 255) return; // added by me edgeTable[cubeindex] == 255
-		printf("Here\n");
 		Voxel* v = hashData.getVoxel(worldPos);
 
 		Vertex vertlist[12];
@@ -231,7 +229,7 @@ struct MarchingCubesData {
 		if(edgeTable[cubeindex] & 512)	vertlist[9]  = vertexInterp(isolevel, p110, p111, dist110, dist111);
 		if(edgeTable[cubeindex] & 1024) vertlist[10] = vertexInterp(isolevel, p100, p101, dist100, dist101);
 		if(edgeTable[cubeindex] & 2048) vertlist[11] = vertexInterp(isolevel, p000, p001, dist000, dist001);
-
+		printf("extractIsoSurfaceAtPosition 4\n");
 		for(int i=0; triTable[cubeindex][i] != -1; i+=3)
 		{
 			Triangle t;
@@ -239,6 +237,7 @@ struct MarchingCubesData {
 			t.v1 = vertlist[triTable[cubeindex][i+1]];
 			t.v2 = vertlist[triTable[cubeindex][i+2]];
 			appendTriangle(t);
+			printf("extractIsoSurfaceAtPosition 6\n");
 		}
 	}
 
@@ -248,17 +247,16 @@ struct MarchingCubesData {
 		const float oSet = c_hashParams.m_virtualVoxelSize;
 		const float3 posDual = pos-make_float3(oSet/2.0f, oSet/2.0f, oSet/2.0f);
 		float3 weight = frac(pos / c_hashParams.m_virtualVoxelSize);
-
+		//printf("extractIsoSurfaceAtPosition 2.2\n");
 		dist = 0.0f;
-		Voxel* v = hash.getVoxel(posDual+make_float3(0.0f, 0.0f, 0.0f)); if(v->weight_sum == 0) return false; dist+= (1.0f-weight.x)*(1.0f-weight.y)*(1.0f-weight.z)*v->sdf_sum/v->weight_sum;
-		      v = hash.getVoxel(posDual+make_float3(oSet, 0.0f, 0.0f)); if(v->weight_sum == 0) return false; dist+=	   weight.x *(1.0f-weight.y)*(1.0f-weight.z)*v->sdf_sum/v->weight_sum;
-		      v = hash.getVoxel(posDual+make_float3(0.0f, oSet, 0.0f)); if(v->weight_sum == 0) return false; dist+= (1.0f-weight.x)*	   weight.y *(1.0f-weight.z)*v->sdf_sum/v->weight_sum;
-		      v = hash.getVoxel(posDual+make_float3(0.0f, 0.0f, oSet)); if(v->weight_sum == 0) return false; dist+= (1.0f-weight.x)*(1.0f-weight.y)*	   weight.z *v->sdf_sum/v->weight_sum;
-		      v = hash.getVoxel(posDual+make_float3(oSet, oSet, 0.0f)); if(v->weight_sum == 0) return false; dist+=	   weight.x *	   weight.y *(1.0f-weight.z)*v->sdf_sum/v->weight_sum;
-		      v = hash.getVoxel(posDual+make_float3(0.0f, oSet, oSet)); if(v->weight_sum == 0) return false; dist+= (1.0f-weight.x)*	   weight.y *	   weight.z *v->sdf_sum/v->weight_sum;
-		      v = hash.getVoxel(posDual+make_float3(oSet, 0.0f, oSet)); if(v->weight_sum == 0) return false; dist+=	   weight.x *(1.0f-weight.y)*	   weight.z *v->sdf_sum/v->weight_sum;
-		      v = hash.getVoxel(posDual+make_float3(oSet, oSet, oSet)); if(v->weight_sum == 0) return false; dist+=	   weight.x *	   weight.y *	   weight.z *v->sdf_sum/v->weight_sum;
-		
+		Voxel* v = hash.getVoxel(posDual+make_float3(0.0f, 0.0f, 0.0f));if(v==NULL) return false; if(v->weight_sum==0) return false;   dist+= (1.0f-weight.x)*(1.0f-weight.y)*(1.0f-weight.z)*v->sdf_sum/(int)v->weight_sum;
+		      v = hash.getVoxel(posDual+make_float3(oSet, 0.0f, 0.0f)); if(v==NULL) return false; if(v->weight_sum==0) return false;  dist+=	   weight.x *(1.0f-weight.y)*(1.0f-weight.z)*v->sdf_sum/(int)v->weight_sum;
+		      v = hash.getVoxel(posDual+make_float3(0.0f, oSet, 0.0f)); if(v==NULL) return false; if(v->weight_sum==0) return false;  dist+= (1.0f-weight.x)*	   weight.y *(1.0f-weight.z)*v->sdf_sum/(int)v->weight_sum;
+		      v = hash.getVoxel(posDual+make_float3(0.0f, 0.0f, oSet)); if(v==NULL) return false; if(v->weight_sum==0) return false;  dist+= (1.0f-weight.x)*(1.0f-weight.y)*	   weight.z *v->sdf_sum/(int)v->weight_sum;
+		      v = hash.getVoxel(posDual+make_float3(oSet, oSet, 0.0f)); if(v==NULL) return false; if(v->weight_sum==0) return false;  dist+=	   weight.x *	   weight.y *(1.0f-weight.z)*v->sdf_sum/(int)v->weight_sum;
+		      v = hash.getVoxel(posDual+make_float3(0.0f, oSet, oSet)); if(v==NULL) return false; if(v->weight_sum==0) return false;  dist+= (1.0f-weight.x)*	   weight.y *	   weight.z *v->sdf_sum/(int)v->weight_sum;
+		      v = hash.getVoxel(posDual+make_float3(oSet, 0.0f, oSet)); if(v==NULL) return false; if(v->weight_sum==0) return false;  dist+=	   weight.x *(1.0f-weight.y)*	   weight.z *v->sdf_sum/(int)v->weight_sum;
+		      v = hash.getVoxel(posDual+make_float3(oSet, oSet, oSet)); if(v==NULL) return false; if(v->weight_sum==0) return false;  dist+=	   weight.x *	   weight.y *	   weight.z *v->sdf_sum/(int)v->weight_sum;
 		return true;
 	}
 

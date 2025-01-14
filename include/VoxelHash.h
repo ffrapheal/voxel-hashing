@@ -53,7 +53,7 @@ struct HashEntry {
 
 struct Voxel {
 	float	sdf_sum;		//signed distance function
-	uchar	weight_sum;		//accumulated sdf weight
+	float	weight_sum;		//accumulated sdf weight
 
 	__device__ void operator=(const struct Voxel& v) {
 		((long long*)this)[0] = ((const long long*)&v)[0];

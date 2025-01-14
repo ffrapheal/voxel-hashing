@@ -83,13 +83,13 @@ extern "C" void extractIsoSurfacePass1CUDA(const HashData& hashData, const March
 
 __global__ void extractIsoSurfacePass2Kernel(HashData hashData, MarchingCubesData data)
 {
-	printf("extractIsoSurfacePass2Kernel 1\n");
+	//printf("extractIsoSurfacePass2Kernel 1\n");
 	uint idx = data.d_occupiedBlocks[blockIdx.x];
-	printf("extractIsoSurfacePass2Kernel 2\n");
+	//printf("extractIsoSurfacePass2Kernel 2\n");
 	const HashEntry& entry = hashData.d_hash[idx];
-	printf("extractIsoSurfacePass2Kernel 3\n");
+	//printf("extractIsoSurfacePass2Kernel 3\n");
 	if (entry.ptr != FREE_ENTRY) {
-		printf("not free entry\n");
+		//printf("not free entry\n");
 		int3 pi_base = hashData.SDFBlockToVirtualVoxelPos(entry.pos);
 		int3 pi = pi_base + make_int3(threadIdx);
 		float3 worldPos = hashData.virtualVoxelPosToWorld(pi);
@@ -103,14 +103,14 @@ extern "C" void extractIsoSurfacePass2CUDA(const HashData& hashData, const March
 	const dim3 gridSize(numOccupiedBlocks, 1, 1);
 	const dim3 blockSize(params.m_sdfBlockSize, params.m_sdfBlockSize, params.m_sdfBlockSize);
 
-	printf("numOccupiedBlocks: %d\n", numOccupiedBlocks);
+	//printf("numOccupiedBlocks: %d\n", numOccupiedBlocks);
 	if (numOccupiedBlocks) {
-		printf("extractIsoSurfacePass2Kernel 4\n");
+		//printf("extractIsoSurfacePass2Kernel 4\n");
 		
 		extractIsoSurfacePass2Kernel << <gridSize, blockSize >> >(hashData, data);
 		cudaCheckError(cudaDeviceSynchronize());
 	}
-	printf("in extractIsoSurfacePass2CUDA, after extractIsoSurfacePass2Kernel\n");
+	//printf("in extractIsoSurfacePass2CUDA, after extractIsoSurfacePass2Kernel\n");
 #ifdef _DEBUG
 	cutilSafeCall(cudaDeviceSynchronize());
 	cutilCheckMsg(__FUNCTION__);

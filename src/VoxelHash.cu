@@ -30,12 +30,16 @@ __global__ void updatesdfframe(HashData* hash, float3* worldpos, float3* normal,
 		__threadfence();
 		if(curr.ptr!=FREE_ENTRY)
 		{
+			if (isnan(normal[idx].x) || isnan(normal[idx].y) || isnan(normal[idx].z)) {
+				return;
+			}
 			float sdf = hash->computesdf(worldpos[idx], normal[idx]);
-			//printf("sdf: %f\n", sdf);
+			printf("sdf: %f\n", sdf);
 			Voxel* voxel = hash->getVoxel(worldpos[idx]);
 			atomicAdd(&voxel->sdf_sum, sdf);
-			atomicAdd((int*)&(voxel->weight_sum), 1);
-			//printf("voxel: %d\n", voxel->sdf_sum);
+			atomicAdd(&voxel->weight_sum, 1.0f);
+			//printf("%f\n",voxel->sdf_sum/(int)voxel->weight_sum);
+			//printf("voxel1: %f, voxel2: %f\n", voxel->weight_sum, hash->d_SDFBlocks[curr.ptr+hash->WorldPosToLocalSDFBlockIndex(worldpos[idx])].weight_sum);
 		}
 	}
 }
@@ -104,7 +108,7 @@ __host__ void HashData::initializeHashParams(HashParams& params, const std::stri
 // DONE: no problems for now.
 __host__ void HashData::allocate(bool dataOnGPU) {
 	HashParams params;
-	initializeHashParams(params, "/home/hmy/voxel_hashing_dev/config/hash_params.yaml");
+	initializeHashParams(params, "/home/zzz/code/hash/config/hash_params.yaml");
 	m_bIsOnGPU = dataOnGPU;
 	if (m_bIsOnGPU) {
 		// allocate memory for heap, heap counter.
@@ -213,7 +217,7 @@ __device__ bool HashData::insertHashEntryElement(const float3& WorldPos) {
 			atomicExch(&d_hashBucketMutex[h], FREE_ENTRY);
 			return true;
 		}
-		atomicExch(&d_hashBucketMutex[h], FREE_ENTRY);
+		//atomicExch(&d_hashBucketMutex[h], FREE_ENTRY);
 	}
 	return false;
 }
@@ -371,6 +375,7 @@ __device__ uint HashData::consumeHeap() {
 // DONE: append the heap, and set the index of the SDF block.
 __device__ void HashData::appendHeap(uint ptr) {
 	uint addr = atomicAdd(&d_heapCounter[0], 1);
+	printf("%d\n",(int)addr);
 	d_heap[addr + 1] = ptr;
 }
 
